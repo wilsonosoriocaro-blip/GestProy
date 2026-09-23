@@ -49,4 +49,28 @@ class BusinessCalendarTest extends TestCase
         $this->assertSame('2026-10-13', $this->calendar->addBusinessDays(CarbonImmutable::parse('2026-10-09'), 1)->toDateString());
         $this->assertSame('2026-09-28', $this->calendar->addBusinessDays(CarbonImmutable::parse('2026-09-26'), 0)->toDateString());
     }
+
+    public function test_fast_count_matches_a_day_by_day_count(): void
+    {
+        mt_srand(2026);
+
+        for ($i = 0; $i < 300; $i++) {
+            $from = CarbonImmutable::parse('2025-01-01')->addDays(mt_rand(0, 900));
+            $to = $from->addDays(mt_rand(-3, 400));
+
+            $expected = 0;
+            for ($day = $from; $day->lte($to); $day = $day->addDay()) {
+                $expected += $this->calendar->isBusinessDay($day) ? 1 : 0;
+            }
+
+            $this->assertSame($expected, $this->calendar->countBetween($from, $to), "{$from->toDateString()} → {$to->toDateString()}");
+        }
+    }
+
+    public function test_sub_business_days(): void
+    {
+        // Tue Oct 13, 2026 minus one business day skips Monday Oct 12 (holiday) and the weekend.
+        $this->assertSame('2026-10-09', $this->calendar->subBusinessDays(CarbonImmutable::parse('2026-10-13'), 1)->toDateString());
+        $this->assertSame('2026-10-13', $this->calendar->subBusinessDays(CarbonImmutable::parse('2026-10-13'), 0)->toDateString());
+    }
 }

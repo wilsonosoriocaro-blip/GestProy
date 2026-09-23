@@ -141,6 +141,43 @@ Los contadores salen de una sola consulta agregada con `COUNT(*) FILTER (...)`.
 
 **Subtareas.** El modelo y la base las soportan (`parent_id`). Por ahora la interfaz no las crea para no mezclar su avance con el de la tarea padre. Cuando se habiliten, el avance de la tarea padre debería salir de sus subtareas.
 
+## Fase 4: tablero ejecutivo
+
+`/dashboard` (`pages::projects.dashboard`) es ahora la página de inicio. Reemplaza el placeholder del starter kit. Muestra solo proyectos no archivados que el usuario puede ver, y se puede filtrar por categoría y responsable.
+
+**Qué muestra:**
+
+- **Avance general del portafolio.** El % real promedio de los proyectos activos con fechas, contra el % esperado a hoy según los días hábiles transcurridos.
+- **Indicadores de proyectos:** activos, en riesgo, atrasados, próximos a finalizar, en pausa, planeados, finalizados y total. Los que tienen filtro equivalente enlazan al listado ya filtrado.
+- **Requiere atención:**
+  - Proyectos atrasados.
+  - Avance bajo frente al tiempo.
+  - Sin actividad reciente (ninguna entrada en el historial en los últimos `PROJECTS_STALE_DAYS` días hábiles, 10 por defecto).
+  - Tareas vencidas.
+  - Tareas próximas a vencer.
+- **Indicadores de tareas** (con la misma definición de `TaskSignals` que usa la lista de tareas).
+- **Gráficos:**
+  - Proyectos por estado y por prioridad.
+  - Tareas por estado.
+  - Carga de trabajo por persona (tareas a tiempo / vencidas y proyectos a cargo).
+  - Avance real contra esperado, los más atrasados primero.
+- **Próximos vencimientos.** Proyectos y tareas que vencen en los próximos 30 días, con los días hábiles restantes.
+
+**Definiciones compartidas.** "En riesgo" significa declarado en riesgo o atrasado, lo mismo que el filtro del listado. Así el número del tablero y el del listado enlazado siempre coinciden.
+
+**Gráficos.** Se hicieron con Blade y Tailwind, sin librería de gráficos:
+
+- Barras horizontales de un solo color, con la categoría como etiqueta (badge con icono y texto) y el valor escrito al lado.
+- La carga de trabajo usa dos series (a tiempo / vencidas) con leyenda y números visibles.
+- Paleta validada para daltonismo y contraste: azul/rojo 600 en modo claro, 500 en oscuro.
+- Cada barra tiene tooltip (`title`).
+
+**Rendimiento:**
+
+- `PortfolioDashboardQuery` hace una consulta liviana de proyectos y calcula el cronograma de cada uno en PHP. Todo lo de tareas sale de agregados SQL.
+- El resultado se guarda en caché 60 segundos por usuario y filtro. El botón con la hora de generación fuerza el recálculo.
+- `BusinessCalendar::countBetween` pasó de recorrer día por día a aritmética de semanas más festivos. Un test lo compara contra el conteo día por día en 300 rangos aleatorios.
+
 ## Pendiente para fases siguientes
 
 - Deshabilitar o controlar la eliminación de cuenta del starter kit. Un usuario responsable de proyectos no se puede borrar porque `owner_id` está en `restrictOnDelete`.

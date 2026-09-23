@@ -38,22 +38,73 @@ class BusinessCalendar
 
     /**
      * Business days between both dates, both ends included. Zero when $from is after $to.
+     *
+     * Runs in constant time per year of range: whole weeks are counted
+     * arithmetically and only holidays inside the range are subtracted, so
+     * dashboards can compute it for every project on each request.
      */
     public function countBetween(CarbonInterface $from, CarbonInterface $to): int
     {
-        $cursor = CarbonImmutable::instance($from)->startOfDay();
+        $start = CarbonImmutable::instance($from)->startOfDay();
         $end = CarbonImmutable::instance($to)->startOfDay();
-        $count = 0;
 
-        while ($cursor->lte($end)) {
-            if ($this->isBusinessDay($cursor)) {
+        if ($start->gt($end)) {
+            return 0;
+        }
+
+        $days = (int) $start->diffInDays($end) + 1;
+        $count = intdiv($days, 7) * (7 - count($this->weekendDays));
+
+        // Leftover days after the whole weeks.
+        for ($cursor = $start->addDays($days - $days % 7); $cursor->lte($end); $cursor = $cursor->addDay()) {
+            if (! isset($this->weekendDays[$cursor->dayOfWeekIso])) {
                 $count++;
             }
+        }
 
-            $cursor = $cursor->addDay();
+        return $count - $this->nonWorkingWeekdaysBetween($start, $end);
+    }
+
+    /**
+     * Holidays and extra days off that fall on a weekday inside the range.
+     */
+    private function nonWorkingWeekdaysBetween(CarbonImmutable $start, CarbonImmutable $end): int
+    {
+        $from = $start->toDateString();
+        $to = $end->toDateString();
+        $dates = $this->extraNonWorkingDays;
+
+        for ($year = $start->year; $year <= $end->year; $year++) {
+            $dates += ColombianHolidays::forYear($year);
+        }
+
+        $count = 0;
+
+        foreach (array_keys($dates) as $date) {
+            if ($date >= $from && $date <= $to && ! isset($this->weekendDays[CarbonImmutable::parse($date)->dayOfWeekIso])) {
+                $count++;
+            }
         }
 
         return $count;
+    }
+
+    /**
+     * The date that is $days business days before $date (the same date with zero).
+     */
+    public function subBusinessDays(CarbonInterface $date, int $days): CarbonImmutable
+    {
+        $cursor = CarbonImmutable::instance($date)->startOfDay();
+
+        while ($days > 0) {
+            $cursor = $cursor->subDay();
+
+            if ($this->isBusinessDay($cursor)) {
+                $days--;
+            }
+        }
+
+        return $cursor;
     }
 
     /**
