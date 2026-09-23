@@ -100,6 +100,47 @@ El "avance bajo" requiere contar días hábiles, así que se muestra en la colum
 php artisan db:seed --class=DemoProjectsSeeder   # usuarios lider@example.com, andres@..., contraseña: password
 ```
 
+## Fase 3: gestión de tareas
+
+Las tareas viven dentro del detalle del proyecto:
+
+- `projects.tasks`: contadores, filtros, tabla o tarjetas, historial y eliminación.
+- `projects.task-form`: panel lateral para crear y editar.
+
+Los dos componentes se comunican con eventos. `open-task-form` abre el panel y `task-saved` avisa que algo cambió, para que la lista y el resumen del proyecto se refresquen sin recargar la página.
+
+**Quién puede hacer qué:**
+
+| Quién | Qué puede hacer |
+|---|---|
+| Responsable del proyecto o `tasks.manage_all` (líder, admin) | Crear, editar todo, reasignar, dependencias, eliminar |
+| Persona asignada a la tarea | Solo estado, avance y observaciones ("Actualizar avance") |
+| Resto del equipo | Consultar |
+
+En un proyecto archivado las tareas quedan de solo lectura.
+
+**Reglas:**
+
+- **Responsable de la tarea.** Tiene que ser el responsable del proyecto o alguien del equipo.
+- **Tarea finalizada.** Queda en 100 % y con fecha real (hoy, si viene vacía). Si sale de ese estado, la fecha real se borra.
+- **Dependencias.** Solo con tareas del mismo proyecto, nunca consigo misma y sin ciclos (`TaskDependencyGuard`).
+- **Eliminar.** Es soft delete y arrastra las subtareas.
+- **Avance del proyecto.** Cada cambio de tarea lo recalcula (`RefreshProjectProgress`) cuando el proyecto está en modo "por tareas", y deja la entrada en el historial.
+- **Historial.** Asignación, cambio de estado, finalización y demás cambios quedan en `project_activity_logs` con el `task_id`. El historial de cada tarea se abre desde su menú.
+
+**Alertas** (`App\Queries\Projects\TaskSignals`): un solo lugar define qué es cada alerta, y lo usan los filtros, los contadores y luego el dashboard.
+
+| Alerta | Definición |
+|---|---|
+| Vencida | Tarea abierta con la fecha de vencimiento ya pasada |
+| Próxima a vencer | Tarea abierta que vence dentro de los próximos 5 días hábiles (hoy incluido; tiene en cuenta los festivos) |
+| Bloqueada | Estado de tipo "bloqueada" |
+| Sin avance | Tarea abierta en 0 % cuya fecha de inicio ya llegó |
+
+Los contadores salen de una sola consulta agregada con `COUNT(*) FILTER (...)`.
+
+**Subtareas.** El modelo y la base las soportan (`parent_id`). Por ahora la interfaz no las crea para no mezclar su avance con el de la tarea padre. Cuando se habiliten, el avance de la tarea padre debería salir de sus subtareas.
+
 ## Pendiente para fases siguientes
 
 - Deshabilitar o controlar la eliminación de cuenta del starter kit. Un usuario responsable de proyectos no se puede borrar porque `owner_id` está en `restrictOnDelete`.

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Number;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 new class extends Component {
@@ -49,6 +50,16 @@ new class extends Component {
     public function recentActivity(): Collection
     {
         return $this->project->activityLogs()->with('user:id,name')->latest('created_at')->latest('id')->limit(8)->get();
+    }
+
+    /**
+     * Task changes may move the calculated progress: reload the summary.
+     */
+    #[On('task-saved')]
+    public function refreshProject(): void
+    {
+        $this->project->refresh()->load(['status', 'priority', 'category', 'owner', 'creator', 'updater']);
+        unset($this->schedule, $this->riskReason, $this->recentActivity);
     }
 
     public function archive(ArchiveProject $action): void
@@ -168,6 +179,9 @@ new class extends Component {
             </div>
         </x-projects.stat>
     </div>
+
+    <livewire:projects.tasks :project="$project" />
+    <livewire:projects.task-form :project="$project" />
 
     <div class="grid gap-6 lg:grid-cols-3">
         {{-- Description --}}

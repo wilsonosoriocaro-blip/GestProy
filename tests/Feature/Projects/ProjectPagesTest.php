@@ -76,8 +76,9 @@ class ProjectPagesTest extends TestCase
     public function test_search_matches_code_name_and_owner(): void
     {
         $leader = $this->userWithRole(Role::Leader);
-        $sap = Project::factory()->create(['name' => 'Migración SAP']);
-        $other = Project::factory()->create(['name' => 'Firewall']);
+        // Fixed descriptions: random lorem ipsum may contain words like "sapiente".
+        $sap = Project::factory()->create(['name' => 'Migración SAP', 'description' => 'ERP']);
+        $other = Project::factory()->create(['name' => 'Firewall', 'description' => 'Redes']);
 
         Livewire::actingAs($leader)->test('pages::projects.index')
             ->set('search', 'sap')

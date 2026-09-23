@@ -9,7 +9,10 @@ use App\Models\Project;
 use App\Models\ProjectCategory;
 use App\Models\ProjectPriority;
 use App\Models\ProjectStatus;
+use App\Models\ProjectTask;
+use App\Models\ProjectTaskStatus;
 use App\Models\User;
+use App\Services\Projects\ProjectProgressCalculator;
 use Illuminate\Database\Seeder;
 
 /**
@@ -73,5 +76,61 @@ class DemoProjectsSeeder extends Seeder
             $teammate = $managers[($index + 1) % $managers->count()];
             $project->members()->syncWithoutDetaching([$teammate->id => ['role' => ProjectMemberRole::Member->value]]);
         }
+
+        $this->seedTasks(Project::where('code', 'DEMO-001')->firstOrFail());
+    }
+
+    /**
+     * A task plan for the SAP migration, with progress calculated from it.
+     */
+    private function seedTasks(Project $project): void
+    {
+        if ($project->tasks()->exists()) {
+            return;
+        }
+
+        $status = fn (string $slug): int => ProjectTaskStatus::where('slug', $slug)->value('id');
+        $priority = fn (string $slug): int => ProjectPriority::where('slug', $slug)->value('id');
+        $team = $project->memberships()->pluck('user_id')->push($project->owner_id)->values();
+
+        $plan = [
+            ['Levantamiento de procesos actuales', 'finalizada', -110, -80, 100, 2],
+            ['Diseño de la solución (blueprint)', 'finalizada', -80, -45, 100, 3],
+            ['Configuración de módulos FI/CO', 'en-ejecucion', -45, 5, 70, 3],
+            ['Migración de datos maestros', 'bloqueada', -30, 10, 35, 2],
+            ['Integración con portal de proveedores', 'en-ejecucion', -20, -2, 40, 2],
+            ['Pruebas integrales', 'pendiente', -5, 40, 0, 3],
+            ['Capacitación a usuarios clave', 'pendiente', 30, 60, 0, 1],
+            ['Salida en vivo', 'pendiente', 70, 90, 0, 1],
+        ];
+
+        $previous = null;
+
+        foreach ($plan as $order => [$name, $st, $start, $due, $progress, $weight]) {
+            $task = new ProjectTask;
+            $task->forceFill([
+                'project_id' => $project->id,
+                'name' => $name,
+                'assignee_id' => $team[$order % $team->count()],
+                'status_id' => $status($st),
+                'priority_id' => $priority($order < 5 ? 'alta' : 'media'),
+                'start_date' => today()->addDays($start),
+                'due_date' => today()->addDays($due),
+                'completed_at' => $st === 'finalizada' ? today()->addDays($due) : null,
+                'progress' => $progress,
+                'weight' => $weight,
+                'sort_order' => $order + 1,
+                'notes' => $st === 'bloqueada' ? 'Esperando validación de datos por parte de Finanzas.' : null,
+            ])->save();
+
+            if ($previous !== null && $order >= 5) {
+                $task->dependencies()->attach($previous);
+            }
+
+            $previous = $task;
+        }
+
+        $project->forceFill(['progress_mode' => ProgressMode::Tasks])->save();
+        app(ProjectProgressCalculator::class)->sync($project);
     }
 }
