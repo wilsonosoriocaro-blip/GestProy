@@ -46,6 +46,41 @@ class CatalogRegistry
     }
 
     /**
+     * Usage of every entry of a catalog in grouped queries (no query per row).
+     *
+     * @return array<int, int> Count per entry id.
+     */
+    public static function usageCounts(string $type): array
+    {
+        $count = function (string $model, string $column): array {
+            return $model::withTrashed()
+                ->selectRaw("{$column} AS entry_id, COUNT(*) AS total")
+                ->groupBy($column)
+                ->pluck('total', 'entry_id')
+                ->map(fn ($total) => (int) $total)
+                ->all();
+        };
+
+        $counts = match ($type) {
+            'categories' => [$count(Project::class, 'category_id')],
+            'project_statuses' => [$count(Project::class, 'status_id')],
+            'task_statuses' => [$count(ProjectTask::class, 'status_id')],
+            'priorities' => [$count(Project::class, 'priority_id'), $count(ProjectTask::class, 'priority_id')],
+            default => [],
+        };
+
+        $total = [];
+
+        foreach ($counts as $group) {
+            foreach ($group as $id => $n) {
+                $total[(int) $id] = ($total[(int) $id] ?? 0) + $n;
+            }
+        }
+
+        return $total;
+    }
+
+    /**
      * Projects and tasks (deleted ones included) that point to the entry.
      */
     public static function usage(string $type, int $id): int

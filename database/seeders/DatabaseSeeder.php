@@ -21,7 +21,12 @@ class DatabaseSeeder extends Seeder
             ProjectCatalogSeeder::class,
         ]);
 
-        // Public registration is disabled: this is the first account. Change its password after the first login.
+        // Local/demo convenience only. In production create the first admin with
+        // `php artisan projects:create-admin`: no well-known credentials there.
+        if (app()->isProduction()) {
+            return;
+        }
+
         $admin = User::firstOrCreate(['email' => 'admin@example.com'], [
             'name' => 'Administrador',
             'password' => 'password',

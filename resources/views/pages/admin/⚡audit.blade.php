@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\Permission;
 use App\Enums\ProjectActivityEvent;
 use App\Enums\Role;
 use App\Models\AuditLog;
@@ -8,6 +9,7 @@ use App\Models\User;
 use App\Services\Projects\ActivityChangeFormatter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
@@ -20,6 +22,15 @@ use Livewire\WithPagination;
  */
 new #[Title('Auditoría')] class extends Component {
     use WithPagination;
+
+    /**
+     * Checked on every request, not only by the route: the component stays
+     * protected wherever it is rendered.
+     */
+    public function boot(): void
+    {
+        abort_unless(Auth::user()?->can(Permission::AuditView->value), 403);
+    }
 
     #[Url(except: 'projects')]
     public string $source = 'projects';

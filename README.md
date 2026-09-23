@@ -1,31 +1,30 @@
-# Laravel + Livewire Starter Kit
+# GestProy · Gestión de Proyectos de Tecnología y Estrategias Digitales
 
-## Introduction
+Aplicación para administrar, planificar y hacer seguimiento a los proyectos del área de Tecnología y Estrategias Digitales: proyectos, tareas, responsables, fechas en días hábiles de Colombia, avance, riesgos, indicadores, cronograma, bitácora, historial y notificaciones.
 
-Our Laravel + [Livewire](https://livewire.laravel.com) starter kit provides a robust, modern starting point for building Laravel applications with a Livewire frontend.
+**Stack:** Laravel 13 · Livewire 4 · PHP 8.3+ · PostgreSQL · Tailwind CSS 4 · Flux UI · spatie/laravel-permission.
 
-Livewire is a powerful way of building dynamic, reactive, frontend UIs using just PHP. It's a great fit for teams that primarily use Blade templates and are looking for a simpler alternative to JavaScript-driven SPA frameworks like React and Vue.
+## Puesta en marcha local
 
-This Livewire starter kit utilizes Livewire 4, TypeScript, Tailwind, and the [Flux UI](https://fluxui.dev) component library.
+```bash
+composer install
+cp .env.example .env            # ajustar DB_PASSWORD
+php artisan key:generate
+php artisan migrate --seed      # roles, catálogos y admin@example.com / password (solo fuera de producción)
+php artisan db:seed --class=DemoProjectsSeeder   # datos de ejemplo (opcional)
+npm install && npm run build
+composer dev                    # servidor, worker de colas, logs y Vite
+```
 
-If you are looking for the alternate configurations of this starter kit, they can be found in the following branches:
+Usuarios de la demo (contraseña `password`): `lider@example.com`, `andres@example.com`, `camila@example.com`, `admin@example.com`.
 
-- [workos](https://github.com/laravel/livewire-starter-kit/tree/workos) - if WorkOS is selected for authentication
+## Pruebas
 
-## Official Documentation
+```bash
+composer test    # Pint + PHPStan (nivel 7) + PHPUnit contra PostgreSQL (base gestproy_testing)
+```
 
-Documentation for all Laravel starter kits can be found on the [Laravel website](https://laravel.com/docs/starter-kits).
+## Documentación
 
-## Contributing
-
-Thank you for considering contributing to our starter kit! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-All contributions to the Starter Kits from now on should be made through [Maestro](https://github.com/laravel/maestro).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## License
-
-The Laravel + Livewire starter kit is open-sourced software licensed under the MIT license.
+- [Módulo de proyectos](docs/modulo-proyectos.md): arquitectura, reglas de negocio y decisiones de cada fase.
+- [Despliegue en producción](docs/despliegue.md): Nginx, PHP-FPM, PostgreSQL, colas, cron, respaldos y actualizaciones.
