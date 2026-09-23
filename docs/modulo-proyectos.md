@@ -178,6 +178,45 @@ Los contadores salen de una sola consulta agregada con `COUNT(*) FILTER (...)`.
 - El resultado se guarda en caché 60 segundos por usuario y filtro. El botón con la hora de generación fuerza el recálculo.
 - `BusinessCalendar::countBetween` pasó de recorrer día por día a aritmética de semanas más festivos. Un test lo compara contra el conteo día por día en 300 rangos aleatorios.
 
+## Fase 5: cronograma (Gantt)
+
+**Por qué sin librería.** Evalué librerías de Gantt:
+
+- DHTMLX Gantt: licencia GPL o comercial.
+- Frappe Gantt: MIT, pero trae su propio SVG y CSS que no siguen el diseño de la app.
+- Otras: todas agregan otro stack de JavaScript que mantener.
+
+Lo que se necesita (barras, avance, hoy, retraso, dependencias y zoom) se resuelve con Blade, Tailwind y un SVG, sin dependencias nuevas.
+
+**Dónde está:**
+
+- `GanttBuilder` (`app/Services/Projects/Gantt`) convierte fechas en posiciones en píxeles. Es puro y tiene tests unitarios con la geometría exacta.
+- `GanttItemFactory` convierte proyectos y tareas en filas.
+- `x-projects.gantt` solo dibuja.
+
+**Vistas:**
+
+- **Detalle del proyecto** (`projects.timeline`): una fila con el proyecto completo y luego sus tareas. Se refresca con el evento `task-saved`. Abre en semanas, o en meses si el proyecto dura más de 4 meses.
+- **`/projects/timeline`** (menú "Cronograma"): una barra por proyecto visible. Filtra por categoría y responsable, y opcionalmente incluye finalizados y cancelados.
+
+**Qué se dibuja:**
+
+- La barra gris es la duración planeada (fechas inclusivas) y la parte azul el avance.
+- El rayado rojo es el retraso de un elemento abierto, desde el vencimiento hasta hoy.
+- Un rombo es un hito (solo tiene una fecha).
+- Las flechas son dependencias fin a inicio.
+- La línea punteada marca hoy.
+- En la escala semanal se sombrean fines de semana y festivos de Colombia.
+
+Escalas: semanas, meses y trimestres. La vista abre desplazada para que hoy quede a un tercio del ancho.
+
+**Accesibilidad:**
+
+- Cada barra tiene `role="img"` con una descripción completa (fechas, avance y estado del cronograma).
+- La columna de nombres muestra el estado con icono y texto.
+- Hay una leyenda visible.
+- La lista de tareas con filtros sigue siendo la vista tabular de los mismos datos.
+
 ## Pendiente para fases siguientes
 
 - Deshabilitar o controlar la eliminación de cuenta del starter kit. Un usuario responsable de proyectos no se puede borrar porque `owner_id` está en `restrictOnDelete`.

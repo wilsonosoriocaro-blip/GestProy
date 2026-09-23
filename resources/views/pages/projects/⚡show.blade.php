@@ -182,6 +182,7 @@ new class extends Component {
 
     <livewire:projects.tasks :project="$project" />
     <livewire:projects.task-form :project="$project" />
+    <livewire:projects.timeline :project="$project" />
 
     <div class="grid gap-6 lg:grid-cols-3">
         {{-- Description --}}
