@@ -111,6 +111,7 @@ new class extends Component {
     {
         return User::query()
             ->whereKey($this->project->memberships()->pluck('user_id')->push($this->project->owner_id))
+            ->where(fn ($query) => $query->whereNull('deactivated_at')->orWhere('id', $this->form->assignee_id === '' ? null : (int) $this->form->assignee_id))
             ->orderBy('name')
             ->get(['id', 'name']);
     }

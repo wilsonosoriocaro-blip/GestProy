@@ -25,6 +25,20 @@
                         Cronograma
                     </flux:sidebar.item>
                 </flux:sidebar.group>
+
+                @canany(['users.manage', 'catalogs.manage', 'audit.view'])
+                    <flux:sidebar.group heading="Administración" class="grid">
+                        @can('users.manage')
+                            <flux:sidebar.item icon="users" :href="route('admin.users')" :current="request()->routeIs('admin.users')" wire:navigate>Usuarios</flux:sidebar.item>
+                        @endcan
+                        @can('catalogs.manage')
+                            <flux:sidebar.item icon="swatch" :href="route('admin.catalogs')" :current="request()->routeIs('admin.catalogs')" wire:navigate>Catálogos</flux:sidebar.item>
+                        @endcan
+                        @can('audit.view')
+                            <flux:sidebar.item icon="shield-check" :href="route('admin.audit')" :current="request()->routeIs('admin.audit')" wire:navigate>Auditoría</flux:sidebar.item>
+                        @endcan
+                    </flux:sidebar.group>
+                @endcanany
             </flux:sidebar.nav>
 
             <flux:spacer />

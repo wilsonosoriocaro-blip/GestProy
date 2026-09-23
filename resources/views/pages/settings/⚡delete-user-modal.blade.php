@@ -19,6 +19,13 @@ new class extends Component {
             'password' => $this->currentPasswordRules(),
         ]);
 
+        // Projects keep their owner: the account cannot go while it owns any.
+        if (Auth::user()->ownedProjects()->withTrashed()->exists()) {
+            $this->addError('password', 'No puedes eliminar tu cuenta mientras seas responsable de proyectos. Pide al líder que los reasigne o que desactive tu usuario.');
+
+            return;
+        }
+
         tap(Auth::user(), $logout(...))->delete();
 
         $this->redirect('/', navigate: true);

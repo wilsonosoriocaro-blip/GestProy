@@ -105,7 +105,10 @@ new class extends Component {
     #[Computed]
     public function users(): Collection
     {
-        return User::query()->orderBy('name')->get(['id', 'name']);
+        return User::query()
+            ->where(fn ($query) => $query->whereNull('deactivated_at')->orWhere('id', $this->form->owner_id))
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     public function render(): mixed

@@ -96,7 +96,8 @@ class ProjectForm extends Form
             'category_id' => ['required', 'integer', Rule::exists('project_categories', 'id')->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $this->project?->category_id))],
             'status_id' => ['required', 'integer', Rule::exists('project_statuses', 'id')->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $this->project?->status_id))],
             'priority_id' => ['required', 'integer', Rule::exists('project_priorities', 'id')->where(fn ($query) => $query->where('is_active', true)->orWhere('id', $this->project?->priority_id))],
-            'owner_id' => ['required', 'integer', Rule::exists('users', 'id')],
+            // Active users only; a project may keep an owner who was deactivated later.
+            'owner_id' => ['required', 'integer', Rule::exists('users', 'id')->where(fn ($query) => $query->whereNull('deactivated_at')->orWhere('id', $this->project?->owner_id))],
             'start_date' => ['nullable', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'completed_at' => ['nullable', 'date'],

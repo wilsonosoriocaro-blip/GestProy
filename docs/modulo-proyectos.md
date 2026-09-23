@@ -245,8 +245,36 @@ Un proyecto archivado no acepta entradas nuevas. Crear, editar y eliminar entrad
 
 **Autor explícito.** `ProjectActivityLogger` acepta el autor de forma explícita. Si no se pasa, usa el usuario autenticado. Así los procesos sin sesión (seeders y, más adelante, los jobs de notificaciones) registran bien quién hizo el cambio.
 
+## Fase 7: permisos, administración y auditoría
+
+**Usuarios** (`/admin/users`, permiso `users.manage`, solo admin):
+
+- **Crear:** nombre, correo y rol. La cuenta nace con una contraseña aleatoria inutilizable y la persona recibe un enlace para definir la suya (el reset de Fortify). Con `MAIL_MAILER=log` el enlace queda en `storage/logs`.
+- **Editar:** nombre, correo y rol. Cada cambio de rol queda auditado.
+- **Desactivar en lugar de borrar.**
+  - Un usuario desactivado no puede entrar: `Fortify::authenticateUsing` le muestra un mensaje claro.
+  - Su sesión abierta se cierra en la siguiente petición (middleware `EnsureUserIsActive`), sin importar cómo entró (contraseña, passkey o "recordarme").
+  - Deja de aparecer para asignar tareas, sumar al equipo o como responsable de proyectos nuevos, pero conserva lo que ya tenía y su historial.
+- **Nadie se puede bloquear a sí mismo:** un admin no se quita su propio rol ni se desactiva.
+
+**Eliminar la propia cuenta** (del starter kit): se bloquea con un mensaje mientras la persona sea responsable de algún proyecto. Así se evita el error de base de datos por `owner_id` en `restrictOnDelete`.
+
+**Catálogos** (`/admin/catalogs`, permiso `catalogs.manage`, líder y admin): categorías, estados de proyecto, estados de tarea y prioridades.
+
+- El nombre, el color, el icono, el orden y el nivel se pueden editar. El `slug` es estable.
+- Cada estado tiene un **comportamiento** (`kind`) que no se puede cambiar una vez está en uso.
+- Hay un solo valor por defecto por catálogo, y ese valor no se puede desactivar.
+- Lo que está en uso se desactiva en vez de borrarse. Los elementos inactivos siguen siendo válidos en los registros que ya los tienen.
+
+**Auditoría** (`/admin/audit`, permiso `audit.view`, líder y admin):
+
+- **Pestaña "Proyectos y tareas":** todos los cambios del portafolio, desde `project_activity_logs`.
+- **Pestaña "Administración":** usuarios, roles y catálogos, desde la tabla nueva `audit_logs`.
+- Se filtra por proyecto o texto, tipo, persona y fechas. Muestra la IP de origen y el antes/después legible.
+
+El menú "Administración" solo aparece con alguno de esos permisos, y cada ruta lo exige con el middleware `can:`.
+
 ## Pendiente para fases siguientes
 
-- Deshabilitar o controlar la eliminación de cuenta del starter kit. Un usuario responsable de proyectos no se puede borrar porque `owner_id` está en `restrictOnDelete`.
 - Los enlaces "Repository" y "Documentation" del menú lateral vienen del starter kit; se pueden quitar cuando se defina la navegación final.
 - Índices trigram (`pg_trgm`) para la búsqueda si el volumen lo pide (fase 9).

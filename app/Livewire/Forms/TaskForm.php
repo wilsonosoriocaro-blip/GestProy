@@ -6,6 +6,7 @@ use App\Models\Project;
 use App\Models\ProjectPriority;
 use App\Models\ProjectTask;
 use App\Models\ProjectTaskStatus;
+use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Locked;
@@ -81,11 +82,12 @@ class TaskForm extends Form
     public function assignableIds(): array
     {
         $project = Project::query()->findOrFail($this->projectId);
+        $team = [$project->owner_id, ...$project->memberships()->pluck('user_id')->map(fn ($id): int => (int) $id)];
 
-        return array_values(array_unique([
-            $project->owner_id,
-            ...$project->memberships()->pluck('user_id')->map(fn ($id): int => (int) $id),
-        ]));
+        // Active people only; the current assignee stays valid even if deactivated later.
+        $active = User::query()->active()->whereKey($team)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+
+        return array_values(array_unique([...$active, ...array_filter([$this->task?->assignee_id])]));
     }
 
     /**

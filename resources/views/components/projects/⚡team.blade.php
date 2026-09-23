@@ -37,6 +37,7 @@ new class extends Component {
     public function candidates(): Collection
     {
         return User::query()
+            ->active()
             ->whereKeyNot($this->project->owner_id)
             ->whereNotIn('id', $this->members->modelKeys())
             ->orderBy('name')
@@ -48,7 +49,7 @@ new class extends Component {
         $this->authorize('manageMembers', $this->project);
 
         $this->validate([
-            'userId' => ['required', 'integer', Rule::exists('users', 'id'), Rule::notIn([$this->project->owner_id])],
+            'userId' => ['required', 'integer', Rule::exists('users', 'id')->whereNull('deactivated_at'), Rule::notIn([$this->project->owner_id])],
             'role' => ['required', Rule::enum(ProjectMemberRole::class)],
         ], attributes: ['userId' => 'persona', 'role' => 'rol']);
 
