@@ -7,6 +7,8 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -14,6 +16,7 @@ use Illuminate\Support\Str;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use Spatie\Permission\Traits\HasRoles;
 
 /**
  * @property int $id
@@ -33,7 +36,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasFactory, HasRoles, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
     /**
      * Get the attributes that should be cast.
@@ -58,5 +61,37 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return Str::length($initials) > 1
             ? Str::substr($initials, 0, 1).Str::substr($initials, -1)
             : $initials;
+    }
+
+    /**
+     * Projects where the user is the main owner.
+     *
+     * @return HasMany<Project, $this>
+     */
+    public function ownedProjects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'owner_id');
+    }
+
+    /**
+     * Projects where the user is part of the team.
+     *
+     * @return BelongsToMany<Project, $this, ProjectMember, 'membership'>
+     */
+    public function memberProjects(): BelongsToMany
+    {
+        return $this->belongsToMany(Project::class, 'project_members')
+            ->using(ProjectMember::class)
+            ->as('membership')
+            ->withPivot(['id', 'role'])
+            ->withTimestamps();
+    }
+
+    /**
+     * @return HasMany<ProjectTask, $this>
+     */
+    public function assignedTasks(): HasMany
+    {
+        return $this->hasMany(ProjectTask::class, 'assignee_id');
     }
 }
