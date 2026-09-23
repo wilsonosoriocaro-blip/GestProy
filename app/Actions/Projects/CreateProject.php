@@ -5,8 +5,10 @@ namespace App\Actions\Projects;
 use App\Actions\Projects\Concerns\AppliesStatusRules;
 use App\Enums\ProgressMode;
 use App\Enums\ProjectActivityEvent;
+use App\Enums\ProjectStatusKind;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\Notifications\ProjectNotifier;
 use App\Services\Projects\ProjectActivityLogger;
 use App\Services\Projects\ProjectCodeGenerator;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +20,7 @@ class CreateProject
     public function __construct(
         private readonly ProjectCodeGenerator $codes,
         private readonly ProjectActivityLogger $activity,
+        private readonly ProjectNotifier $notifier,
     ) {}
 
     /**
@@ -45,6 +48,12 @@ class CreateProject
                 'owner_id' => $project->owner_id,
                 'status_id' => $project->status_id,
             ]);
+
+            $this->notifier->projectOwnerAssigned($project, $actor);
+
+            if ($project->status->kind === ProjectStatusKind::AtRisk) {
+                $this->notifier->projectAtRisk($project, $actor);
+            }
 
             return $project;
         });

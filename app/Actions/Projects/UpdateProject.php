@@ -5,9 +5,11 @@ namespace App\Actions\Projects;
 use App\Actions\Projects\Concerns\AppliesStatusRules;
 use App\Enums\ProgressMode;
 use App\Enums\ProjectActivityEvent;
+use App\Enums\ProjectStatusKind;
 use App\Models\Project;
 use App\Models\ProjectStatus;
 use App\Models\User;
+use App\Services\Notifications\ProjectNotifier;
 use App\Services\Projects\ProjectActivityLogger;
 use App\Services\Projects\ProjectProgressCalculator;
 use Carbon\CarbonInterface;
@@ -23,6 +25,7 @@ class UpdateProject
     public function __construct(
         private readonly ProjectProgressCalculator $progress,
         private readonly ProjectActivityLogger $activity,
+        private readonly ProjectNotifier $notifier,
     ) {}
 
     /**
@@ -48,9 +51,25 @@ class UpdateProject
             $project->save();
 
             $this->logChanges($project, $changes);
+            $this->notify($actor, $project, $changes);
 
             return $project;
         });
+    }
+
+    /**
+     * @param  array<string, array{mixed, mixed}>  $changes
+     */
+    private function notify(User $actor, Project $project, array $changes): void
+    {
+        if (isset($changes['owner_id'])) {
+            $this->notifier->projectOwnerAssigned($project->load('owner'), $actor);
+        }
+
+        if (isset($changes['status_id']) && $project->load('status')->status->kind === ProjectStatusKind::AtRisk
+            && ProjectStatus::query()->find((int) $changes['status_id'][0])?->kind !== ProjectStatusKind::AtRisk) {
+            $this->notifier->projectAtRisk($project, $actor);
+        }
     }
 
     /**

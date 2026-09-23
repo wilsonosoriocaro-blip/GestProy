@@ -274,6 +274,42 @@ Un proyecto archivado no acepta entradas nuevas. Crear, editar y eliminar entrad
 
 El menú "Administración" solo aparece con alguno de esos permisos, y cada ruta lo exige con el middleware `can:`.
 
+## Fase 8: notificaciones
+
+**Canales.** Se configuran en `config/projects.php` / `.env`:
+
+| Canal | Qué hace | Cómo se activa |
+|---|---|---|
+| `database` | Campanita dentro de la app, con el contador de no leídas (se refresca cada minuto) | Siempre activo |
+| `mail` | Correo con plantilla en español | Cada persona lo puede apagar en Ajustes → Notificaciones |
+| Microsoft Teams | Tarjeta en un canal del equipo (webhook entrante) para alertas de todo el equipo | Se activa con `PROJECTS_TEAMS_WEBHOOK_URL` |
+
+WhatsApp u otros canales se agregan igual que `TeamsWebhookChannel`: una clase con `send()` más un método `toX()` en `ProjectNotification`.
+
+**Avisos inmediatos.** `ProjectNotifier` decide los destinatarios: nunca avisa a quien hizo el cambio ni a usuarios desactivados.
+
+| Aviso | Quién lo recibe |
+|---|---|
+| Tarea asignada o reasignada | La persona asignada |
+| Te asignaron como responsable de un proyecto | El nuevo responsable |
+| Proyecto pasa a un estado de tipo "en riesgo" | El responsable, todos los líderes y el canal de Teams si está configurado. Solo al entrar al estado, no en cada edición |
+
+**Resumen diario** (`php artisan projects:send-alerts`, programado a las 07:00 de lunes a viernes; hora en `PROJECTS_DIGEST_TIME`):
+
+- **Una sola notificación por persona** con sus tareas vencidas y próximas a vencer y los proyectos a su cargo atrasados o próximos a vencer. Las definiciones son las mismas de `TaskSignals` y del tablero.
+- **Tareas sin asignar,** o asignadas a alguien desactivado: van al responsable del proyecto.
+- **Solo días hábiles:** no se envía en fines de semana ni festivos de Colombia (`--force` lo obliga).
+- **Nunca dos veces el mismo día:** la tabla `project_alert_digests` guarda una fila única por persona y fecha.
+
+**Encolado.** Las notificaciones se encolan y salen después de que la transacción se confirma.
+
+En producción hay que correr:
+
+- el worker de colas: `php artisan queue:work`, con Supervisor o systemd;
+- el scheduler: `* * * * * php artisan schedule:run` en el cron.
+
+En desarrollo, `composer dev` ya levanta el worker.
+
 ## Pendiente para fases siguientes
 
 - Los enlaces "Repository" y "Documentation" del menú lateral vienen del starter kit; se pueden quitar cuando se defina la navegación final.

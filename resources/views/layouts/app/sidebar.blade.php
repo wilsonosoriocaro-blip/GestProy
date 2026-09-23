@@ -15,6 +15,7 @@
                     <flux:sidebar.item icon="chart-pie" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         Tablero ejecutivo
                     </flux:sidebar.item>
+                    <livewire:notifications.bell />
                 </flux:sidebar.group>
 
                 <flux:sidebar.group heading="Gestión de proyectos" class="grid">

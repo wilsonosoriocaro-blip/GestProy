@@ -8,6 +8,7 @@ use App\Enums\ProjectActivityEvent;
 use App\Models\Project;
 use App\Models\ProjectTask;
 use App\Models\User;
+use App\Services\Notifications\ProjectNotifier;
 use App\Services\Projects\ProjectActivityLogger;
 use App\Services\Projects\TaskDependencyGuard;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,7 @@ class CreateTask
         private readonly TaskDependencyGuard $dependencies,
         private readonly ProjectActivityLogger $activity,
         private readonly RefreshProjectProgress $progress,
+        private readonly ProjectNotifier $notifier,
     ) {}
 
     /**
@@ -55,6 +57,7 @@ class CreateTask
             }
 
             $this->progress->handle($project);
+            $this->notifier->taskAssigned($task, $actor);
 
             return $task;
         });
