@@ -56,7 +56,52 @@ El registro público está deshabilitado. El primer usuario lo crea el seeder y 
 | member | Ve sus proyectos y actualiza sus tareas |
 | viewer | Consulta todos los proyectos, sin editar |
 
+## Fase 2: CRUD de proyectos
+
+**Pantallas** (Livewire 4, componentes de un solo archivo como el resto del kit):
+
+| Ruta | Componente | Qué hace |
+|---|---|---|
+| `/projects` | `pages::projects.index` | Listado con búsqueda, filtros, orden y paginación. En móvil se ve como tarjetas |
+| `/projects/create` | `pages::projects.form` | Alta de proyecto |
+| `/projects/{id}` | `pages::projects.show` | Resumen ejecutivo, datos, equipo y actividad reciente |
+| `/projects/{id}/edit` | `pages::projects.form` | Edición (la misma página del alta) |
+
+El equipo se administra desde el detalle con el componente `projects.team`.
+
+**Dónde está la lógica:**
+
+- Componentes Blade reutilizables en `resources/views/components/projects`: badges de estado, prioridad y salud, barra de avance y tarjeta de indicador.
+- Las páginas solo orquestan. La lógica está en:
+  - `ProjectForm` (Form object de Livewire): validación.
+  - Actions en `app/Actions/Projects`: `CreateProject`, `UpdateProject`, `ArchiveProject`, `DeleteProject`, `ManageProjectMembers`.
+  - `ProjectIndexQuery`: filtros y orden, resueltos en SQL.
+  - `ProjectPolicy`: permisos.
+
+**Reglas de negocio:**
+
+- **Código.** Si se deja vacío se genera como `TED-{año}-{consecutivo}`. Un advisory lock de PostgreSQL evita que dos altas simultáneas saquen el mismo número. El prefijo se cambia en `config/projects.php`.
+- **Finalizado.** Al pasar a un estado de tipo "finalizado" se llena la fecha real (hoy, si viene vacía), y si el avance es manual queda en 100 %. Al salir de ese estado la fecha real se borra.
+- **Avance por tareas.** Si el proyecto calcula su avance por tareas, lo que se escriba a mano se ignora.
+- **Proyectos archivados.** Son de solo lectura hasta que se restauran.
+- **Eliminar.** Es soft delete.
+- **Historial.** Cada cambio relevante queda en `project_activity_logs` con usuario, IP, valores anteriores y nuevos. Un cambio de estado, de responsable, de fechas o de avance tiene su propio evento. Guardar sin cambios no registra nada.
+
+**Filtros "atrasado" y "en riesgo".** Se resuelven en SQL para poder paginar:
+
+- Atrasado: la fecha de fin ya pasó y el proyecto sigue abierto.
+- En riesgo: estado de tipo "en riesgo", o atrasado.
+
+El "avance bajo" requiere contar días hábiles, así que se muestra en la columna Cronograma pero no se filtra (quedará en el dashboard de la fase 4).
+
+**Datos de ejemplo:**
+
+```bash
+php artisan db:seed --class=DemoProjectsSeeder   # usuarios lider@example.com, andres@..., contraseña: password
+```
+
 ## Pendiente para fases siguientes
 
 - Deshabilitar o controlar la eliminación de cuenta del starter kit. Un usuario responsable de proyectos no se puede borrar porque `owner_id` está en `restrictOnDelete`.
+- Los enlaces "Repository" y "Documentation" del menú lateral vienen del starter kit; se pueden quitar cuando se defina la navegación final.
 - Índices trigram (`pg_trgm`) para la búsqueda si el volumen lo pide (fase 9).

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Data\ScheduleSnapshot;
+use App\Enums\Permission;
 use App\Enums\ProgressMode;
 use App\Services\Projects\ScheduleCalculator;
 use Carbon\CarbonImmutable;
@@ -196,6 +197,24 @@ class Project extends Model
     protected function archived(Builder $query): void
     {
         $query->whereNotNull('archived_at');
+    }
+
+    /**
+     * Projects the user may see: all of them with the "view all" permission,
+     * otherwise the ones they own or belong to.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function visibleTo(Builder $query, User $user): void
+    {
+        if ($user->can(Permission::ProjectsViewAll->value)) {
+            return;
+        }
+
+        $query->where(fn (Builder $query) => $query
+            ->where('owner_id', $user->id)
+            ->orWhereHas('memberships', fn (Builder $query) => $query->where('user_id', $user->id)));
     }
 
     public function isArchived(): bool
