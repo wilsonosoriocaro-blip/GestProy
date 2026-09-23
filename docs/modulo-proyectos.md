@@ -217,6 +217,34 @@ Escalas: semanas, meses y trimestres. La vista abre desplazada para que hoy qued
 - Hay una leyenda visible.
 - La lista de tareas con filtros sigue siendo la vista tabular de los mismos datos.
 
+## Fase 6: bitácora e historial
+
+**Detalle del proyecto en pestañas.** El encabezado y el resumen ejecutivo quedan fijos arriba. Debajo van las pestañas Tareas, Cronograma, Bitácora, Historial y Detalles y equipo:
+
+- La pestaña activa queda en la URL (`?tab=`), así se puede compartir el enlace.
+- Solo se monta el componente de la pestaña abierta.
+
+**Bitácora** (`projects.log`, tabla `project_comments`): actualizaciones de seguimiento con usuario, fecha y hora. Una entrada puede relacionarse con una tarea. Las destacadas funcionan como hitos del proyecto y se pueden filtrar.
+
+| Quién | Qué puede hacer |
+|---|---|
+| Equipo del proyecto y líder | Escribir |
+| Quien puede ver el proyecto | Leer |
+| Autor | Editar su entrada |
+| Autor, responsable del proyecto o líder | Eliminar |
+| Responsable del proyecto o líder | Destacar |
+
+Un proyecto archivado no acepta entradas nuevas. Crear, editar y eliminar entradas queda en el historial (el texto anterior incluido) y cuenta como actividad reciente del proyecto.
+
+**Historial** (`projects.history`): todos los eventos del proyecto y de sus tareas.
+
+- **Filtros:** tipo de cambio, persona y rango de fechas. Paginado.
+- **Detalle:** cada entrada se expande con una tabla campo / antes / después.
+- **Valores legibles:** `ActivityChangeFormatter` convierte los valores guardados (ids a nombres, fechas, %, montos en COP, modo de avance, dependencias) y resuelve los nombres con una consulta por catálogo por página.
+- **IP de origen:** solo la ven quienes tienen el permiso `audit.view` (líder y admin).
+
+**Autor explícito.** `ProjectActivityLogger` acepta el autor de forma explícita. Si no se pasa, usa el usuario autenticado. Así los procesos sin sesión (seeders y, más adelante, los jobs de notificaciones) registran bien quién hizo el cambio.
+
 ## Pendiente para fases siguientes
 
 - Deshabilitar o controlar la eliminación de cuenta del starter kit. Un usuario responsable de proyectos no se puede borrar porque `owner_id` está en `restrictOnDelete`.

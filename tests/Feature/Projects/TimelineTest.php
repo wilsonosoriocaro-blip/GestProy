@@ -65,12 +65,16 @@ class TimelineTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_project_page_includes_the_timeline(): void
+    public function test_timeline_tab_loads_only_when_opened(): void
     {
         $leader = $this->userWithRole(Role::Leader);
         $project = Project::factory()->create();
 
         $this->actingAs($leader)->get(route('projects.show', $project))
+            ->assertOk()
+            ->assertDontSee('Duración, avance y dependencias de las tareas');
+
+        $this->actingAs($leader)->get(route('projects.show', ['project' => $project, 'tab' => 'timeline']))
             ->assertOk()
             ->assertSee('Duración, avance y dependencias de las tareas');
     }

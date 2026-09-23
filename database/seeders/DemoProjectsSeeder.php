@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Actions\Comments\ManageProjectComments;
 use App\Enums\ProgressMode;
 use App\Enums\ProjectMemberRole;
 use App\Enums\Role;
@@ -77,7 +78,26 @@ class DemoProjectsSeeder extends Seeder
             $project->members()->syncWithoutDetaching([$teammate->id => ['role' => ProjectMemberRole::Member->value]]);
         }
 
-        $this->seedTasks(Project::where('code', 'DEMO-001')->firstOrFail());
+        $sap = Project::where('code', 'DEMO-001')->firstOrFail();
+        $this->seedTasks($sap);
+        $this->seedLog($sap, $leader);
+    }
+
+    /**
+     * A few log entries, written through the real action so they also land in the history.
+     */
+    private function seedLog(Project $project, User $leader): void
+    {
+        if ($project->comments()->exists()) {
+            return;
+        }
+
+        $comments = app(ManageProjectComments::class);
+        $owner = $project->owner;
+
+        $comments->add($owner, $project, 'Se aprobó el blueprint con el comité de Finanzas. Arranca la configuración de FI/CO.', true);
+        $comments->add($leader, $project, 'Riesgo: la migración de datos maestros depende de la depuración que hace Finanzas. Se escaló al director.');
+        $comments->add($owner, $project, 'Se finalizó la integración con SAP del portal de proveedores y se inició la fase de pruebas con usuarios.');
     }
 
     /**
@@ -86,6 +106,8 @@ class DemoProjectsSeeder extends Seeder
     private function seedTasks(Project $project): void
     {
         if ($project->tasks()->exists()) {
+            $this->useTaskProgress($project);
+
             return;
         }
 
@@ -130,6 +152,11 @@ class DemoProjectsSeeder extends Seeder
             $previous = $task;
         }
 
+        $this->useTaskProgress($project);
+    }
+
+    private function useTaskProgress(Project $project): void
+    {
         $project->forceFill(['progress_mode' => ProgressMode::Tasks])->save();
         app(ProjectProgressCalculator::class)->sync($project);
     }

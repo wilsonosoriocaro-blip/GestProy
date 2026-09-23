@@ -5,17 +5,19 @@ use App\Actions\Projects\DeleteProject;
 use App\Data\ScheduleSnapshot;
 use App\Enums\ProjectStatusKind;
 use App\Models\Project;
-use App\Models\ProjectActivityLog;
 use Flux\Flux;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Number;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 new class extends Component {
     public Project $project;
+
+    #[Url(except: 'tasks')]
+    public string $tab = 'tasks';
 
     public function mount(Project $project): void
     {
@@ -44,12 +46,27 @@ new class extends Component {
     }
 
     /**
-     * @return Collection<int, ProjectActivityLog>
+     * Tabs with their icon and, where useful, a counter.
+     *
+     * @return array<string, array{string, string, int|null}>
      */
     #[Computed]
-    public function recentActivity(): Collection
+    public function tabs(): array
     {
-        return $this->project->activityLogs()->with('user:id,name')->latest('created_at')->latest('id')->limit(8)->get();
+        return [
+            'tasks' => ['Tareas', 'clipboard-document-list', $this->project->tasks()->count()],
+            'timeline' => ['Cronograma', 'calendar-days', null],
+            'log' => ['Bitácora', 'chat-bubble-left-ellipsis', $this->project->comments()->count()],
+            'history' => ['Historial', 'clock', null],
+            'details' => ['Detalles y equipo', 'information-circle', null],
+        ];
+    }
+
+    public function updatedTab(): void
+    {
+        if (! array_key_exists($this->tab, $this->tabs)) {
+            $this->tab = 'tasks';
+        }
     }
 
     /**
@@ -59,7 +76,7 @@ new class extends Component {
     public function refreshProject(): void
     {
         $this->project->refresh()->load(['status', 'priority', 'category', 'owner', 'creator', 'updater']);
-        unset($this->schedule, $this->riskReason, $this->recentActivity);
+        unset($this->schedule, $this->riskReason, $this->tabs);
     }
 
     public function archive(ArchiveProject $action): void
@@ -180,80 +197,90 @@ new class extends Component {
         </x-projects.stat>
     </div>
 
-    <livewire:projects.tasks :project="$project" />
-    <livewire:projects.task-form :project="$project" />
-    <livewire:projects.timeline :project="$project" />
-
-    <div class="grid gap-6 lg:grid-cols-3">
-        {{-- Description --}}
-        <div class="flex flex-col gap-6 lg:col-span-2">
-            @foreach (['description' => 'Descripción', 'objective' => 'Objetivo', 'scope' => 'Alcance', 'notes' => 'Observaciones'] as $field => $label)
-                @if (filled($project->{$field}))
-                    <div>
-                        <flux:heading level="2" size="lg">{{ $label }}</flux:heading>
-                        <flux:text class="mt-2 whitespace-pre-line">{{ $project->{$field} }}</flux:text>
-                    </div>
-                @endif
+    {{-- Sections: only the open tab mounts its components --}}
+    <div class="flex flex-col gap-6">
+        <div role="tablist" aria-label="Secciones del proyecto" class="-mb-px flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-zinc-700">
+            @foreach ($this->tabs as $key => [$label, $icon, $count])
+                <button type="button" role="tab" id="tab-{{ $key }}" aria-controls="panel-{{ $key }}"
+                    aria-selected="{{ $tab === $key ? 'true' : 'false' }}" wire:click="$set('tab', '{{ $key }}')" wire:key="tab-{{ $key }}"
+                    @class([
+                        'inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition',
+                        'border-zinc-900 text-zinc-900 dark:border-white dark:text-white' => $tab === $key,
+                        'border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200' => $tab !== $key,
+                    ])>
+                    <flux:icon :name="$icon" variant="micro" />
+                    {{ $label }}
+                    @if ($count !== null)
+                        <span class="rounded-full bg-zinc-100 px-1.5 text-xs tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">{{ $count }}</span>
+                    @endif
+                </button>
             @endforeach
-
-            <div>
-                <flux:heading level="2" size="lg">Actividad reciente</flux:heading>
-
-                @if ($this->recentActivity->isEmpty())
-                    <flux:text class="mt-2">Sin actividad registrada.</flux:text>
-                @else
-                    <ol class="mt-3 flex flex-col gap-3 border-s border-zinc-200 ps-4 dark:border-zinc-700">
-                        @foreach ($this->recentActivity as $entry)
-                            <li wire:key="activity-{{ $entry->id }}" class="text-sm">
-                                <div class="font-medium text-zinc-800 dark:text-white">{{ $entry->event->label() }}</div>
-                                @if ($entry->description)
-                                    <div class="text-zinc-600 dark:text-zinc-300">{{ $entry->description }}</div>
-                                @endif
-                                <div class="text-xs text-zinc-500 dark:text-zinc-400">
-                                    {{ $entry->user?->name ?? 'Sistema' }} ·
-                                    <time datetime="{{ $entry->created_at->toIso8601String() }}">{{ $entry->created_at->translatedFormat('d M Y, h:i a') }}</time>
-                                </div>
-                            </li>
-                        @endforeach
-                    </ol>
-                @endif
-            </div>
         </div>
 
-        {{-- Facts --}}
-        <aside class="flex flex-col gap-6">
-            <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-700">
-                <dt class="text-zinc-500 dark:text-zinc-400">Responsable</dt>
-                <dd class="font-medium">{{ $project->owner->name }}</dd>
+        <div role="tabpanel" id="panel-{{ $tab }}" aria-labelledby="tab-{{ $tab }}" wire:loading.class="opacity-60" wire:target="tab">
+            @if ($tab === 'tasks')
+                <livewire:projects.tasks :project="$project" :key="'tasks-'.$project->id" />
+                <livewire:projects.task-form :project="$project" :key="'task-form-'.$project->id" />
+            @elseif ($tab === 'timeline')
+                <livewire:projects.timeline :project="$project" :key="'timeline-'.$project->id" />
+            @elseif ($tab === 'log')
+                <livewire:projects.log :project="$project" :key="'log-'.$project->id" />
+            @elseif ($tab === 'history')
+                <livewire:projects.history :project="$project" :key="'history-'.$project->id" />
+            @else
+                <div class="grid gap-6 lg:grid-cols-3">
+                    <div class="flex flex-col gap-6 lg:col-span-2">
+                        @foreach (['description' => 'Descripción', 'objective' => 'Objetivo', 'scope' => 'Alcance', 'notes' => 'Observaciones'] as $field => $label)
+                            @if (filled($project->{$field}))
+                                <div>
+                                    <flux:heading level="2" size="lg">{{ $label }}</flux:heading>
+                                    <flux:text class="mt-2 whitespace-pre-line">{{ $project->{$field} }}</flux:text>
+                                </div>
+                            @endif
+                        @endforeach
 
-                <dt class="text-zinc-500 dark:text-zinc-400">Categoría</dt>
-                <dd>{{ $project->category->name }}</dd>
+                        @if (blank($project->description) && blank($project->objective) && blank($project->scope) && blank($project->notes))
+                            <flux:text>Sin descripción, objetivo ni alcance registrados.</flux:text>
+                        @endif
+                    </div>
 
-                <dt class="text-zinc-500 dark:text-zinc-400">Inicio</dt>
-                <dd>{{ $project->start_date?->translatedFormat('d M Y') ?? 'Sin definir' }}</dd>
+                {{-- Facts --}}
+                <aside class="flex flex-col gap-6">
+                    <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 rounded-xl border border-zinc-200 p-4 text-sm dark:border-zinc-700">
+                        <dt class="text-zinc-500 dark:text-zinc-400">Responsable</dt>
+                        <dd class="font-medium">{{ $project->owner->name }}</dd>
 
-                <dt class="text-zinc-500 dark:text-zinc-400">Fin estimado</dt>
-                <dd>{{ $project->due_date?->translatedFormat('d M Y') ?? 'Sin definir' }}</dd>
+                        <dt class="text-zinc-500 dark:text-zinc-400">Categoría</dt>
+                        <dd>{{ $project->category->name }}</dd>
 
-                @if ($project->completed_at)
-                    <dt class="text-zinc-500 dark:text-zinc-400">Fin real</dt>
-                    <dd>{{ $project->completed_at->translatedFormat('d M Y') }}</dd>
-                @endif
+                        <dt class="text-zinc-500 dark:text-zinc-400">Inicio</dt>
+                        <dd>{{ $project->start_date?->translatedFormat('d M Y') ?? 'Sin definir' }}</dd>
 
-                @if ($project->budget !== null)
-                    <dt class="text-zinc-500 dark:text-zinc-400">Presupuesto</dt>
-                    <dd class="tabular-nums">{{ Number::currency((float) $project->budget, in: 'COP', locale: 'es_CO') }}</dd>
-                @endif
+                        <dt class="text-zinc-500 dark:text-zinc-400">Fin estimado</dt>
+                        <dd>{{ $project->due_date?->translatedFormat('d M Y') ?? 'Sin definir' }}</dd>
 
-                <dt class="text-zinc-500 dark:text-zinc-400">Creado</dt>
-                <dd>{{ $project->created_at?->translatedFormat('d M Y') }}@if ($project->creator) · {{ $project->creator->name }}@endif</dd>
+                        @if ($project->completed_at)
+                            <dt class="text-zinc-500 dark:text-zinc-400">Fin real</dt>
+                            <dd>{{ $project->completed_at->translatedFormat('d M Y') }}</dd>
+                        @endif
 
-                <dt class="text-zinc-500 dark:text-zinc-400">Actualizado</dt>
-                <dd>{{ $project->updated_at?->translatedFormat('d M Y, h:i a') }}@if ($project->updater) · {{ $project->updater->name }}@endif</dd>
-            </dl>
+                        @if ($project->budget !== null)
+                            <dt class="text-zinc-500 dark:text-zinc-400">Presupuesto</dt>
+                            <dd class="tabular-nums">{{ Number::currency((float) $project->budget, in: 'COP', locale: 'es_CO') }}</dd>
+                        @endif
 
-            <livewire:projects.team :project="$project" />
-        </aside>
+                        <dt class="text-zinc-500 dark:text-zinc-400">Creado</dt>
+                        <dd>{{ $project->created_at?->translatedFormat('d M Y') }}@if ($project->creator) · {{ $project->creator->name }}@endif</dd>
+
+                        <dt class="text-zinc-500 dark:text-zinc-400">Actualizado</dt>
+                        <dd>{{ $project->updated_at?->translatedFormat('d M Y, h:i a') }}@if ($project->updater) · {{ $project->updater->name }}@endif</dd>
+                    </dl>
+
+                    <livewire:projects.team :project="$project" />
+                </aside>
+                </div>
+            @endif
+        </div>
     </div>
 
     {{-- Confirmations --}}

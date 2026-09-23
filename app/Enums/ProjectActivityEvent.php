@@ -26,6 +26,8 @@ enum ProjectActivityEvent: string
     case TaskCompleted = 'task.completed';
     case TaskDeleted = 'task.deleted';
     case CommentAdded = 'comment.added';
+    case CommentUpdated = 'comment.updated';
+    case CommentDeleted = 'comment.deleted';
 
     public function label(): string
     {
@@ -48,6 +50,48 @@ enum ProjectActivityEvent: string
             self::TaskCompleted => 'Tarea finalizada',
             self::TaskDeleted => 'Tarea eliminada',
             self::CommentAdded => 'Comentario',
+            self::CommentUpdated => 'Comentario editado',
+            self::CommentDeleted => 'Comentario eliminado',
+        };
+    }
+
+    /**
+     * Groups offered by the history filter.
+     *
+     * @return array<string, array{label: string, events: list<self>}>
+     */
+    public static function groups(): array
+    {
+        return [
+            'project' => ['label' => 'Datos del proyecto', 'events' => [self::ProjectCreated, self::ProjectUpdated, self::ProjectArchived, self::ProjectRestored, self::ProjectDeleted]],
+            'status' => ['label' => 'Estado', 'events' => [self::StatusChanged]],
+            'owner' => ['label' => 'Responsable', 'events' => [self::OwnerChanged]],
+            'dates' => ['label' => 'Fechas', 'events' => [self::DatesChanged]],
+            'progress' => ['label' => 'Avance', 'events' => [self::ProgressChanged]],
+            'tasks' => ['label' => 'Tareas', 'events' => [self::TaskCreated, self::TaskUpdated, self::TaskAssigned, self::TaskStatusChanged, self::TaskCompleted, self::TaskDeleted]],
+            'team' => ['label' => 'Equipo', 'events' => [self::MemberAdded, self::MemberRemoved]],
+            'comments' => ['label' => 'Bitácora', 'events' => [self::CommentAdded, self::CommentUpdated, self::CommentDeleted]],
+        ];
+    }
+
+    /** Heroicon name for the timeline. */
+    public function icon(): string
+    {
+        return match ($this) {
+            self::ProjectCreated => 'sparkles',
+            self::ProjectUpdated, self::TaskUpdated => 'pencil-square',
+            self::StatusChanged, self::TaskStatusChanged => 'arrow-path',
+            self::OwnerChanged, self::TaskAssigned => 'user',
+            self::DatesChanged => 'calendar-days',
+            self::ProgressChanged => 'chart-bar',
+            self::ProjectArchived => 'archive-box',
+            self::ProjectRestored => 'arrow-uturn-left',
+            self::ProjectDeleted, self::TaskDeleted, self::CommentDeleted => 'trash',
+            self::MemberAdded => 'user-plus',
+            self::MemberRemoved => 'user-minus',
+            self::TaskCreated => 'plus-circle',
+            self::TaskCompleted => 'check-circle',
+            self::CommentAdded, self::CommentUpdated => 'chat-bubble-left-ellipsis',
         };
     }
 }
