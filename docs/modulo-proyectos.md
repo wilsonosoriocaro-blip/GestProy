@@ -197,7 +197,7 @@ Lo que se necesita (barras, avance, hoy, retraso, dependencias y zoom) se resuel
 **Vistas:**
 
 - **Detalle del proyecto** (`projects.timeline`): una fila con el proyecto completo y luego sus tareas. Se refresca con el evento `task-saved`. Abre en semanas, o en meses si el proyecto dura más de 4 meses.
-- **`/projects/timeline`** (menú "Cronograma"): una barra por proyecto visible. Filtra por categoría y responsable, y opcionalmente incluye finalizados y cancelados.
+- **`/projects/timeline`** (menú "Cronograma"): una barra por proyecto visible. Filtra por categoría y responsable, opcionalmente incluye finalizados y cancelados, y con "Mostrar tareas de los proyectos" abre debajo de cada proyecto las barras de sus tareas (igual que en el detalle). Apagado por defecto para no cambiar la vista de siempre; las tareas solo se cargan de la base de datos cuando se activa.
 
 **Qué se dibuja:**
 
