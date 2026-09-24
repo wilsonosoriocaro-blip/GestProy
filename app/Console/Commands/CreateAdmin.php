@@ -4,9 +4,11 @@ namespace App\Console\Commands;
 
 use App\Enums\Role;
 use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -49,8 +51,13 @@ class CreateAdmin extends Command
             $user->password = Str::password(40);
         }
 
-        $user->forceFill(['email_verified_at' => $user->email_verified_at ?? now(), 'deactivated_at' => null])->save();
-        $user->syncRoles([Role::Admin->value]);
+        // Roles may not exist yet if db:seed was never run; the seeder is idempotent.
+        DB::transaction(function () use ($user): void {
+            $this->callSilently('db:seed', ['--class' => RolesAndPermissionsSeeder::class, '--force' => true]);
+
+            $user->forceFill(['email_verified_at' => $user->email_verified_at ?? now(), 'deactivated_at' => null])->save();
+            $user->syncRoles([Role::Admin->value]);
+        });
 
         if (! $this->option('with-password')) {
             Password::sendResetLink(['email' => $email]);
