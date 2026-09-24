@@ -106,4 +106,46 @@ class TimelineTest extends TestCase
     {
         $this->get(route('projects.timeline'))->assertRedirect(route('login'));
     }
+
+    public function test_selecting_a_person_with_show_tasks_adds_their_workload_in_other_projects(): void
+    {
+        // Needs to see the whole portfolio (ProjectsViewAll), not just what they own.
+        $viewer = $this->userWithRole(Role::Leader);
+        $member = $this->userWithRole(Role::Member);
+        $teammate = $this->userWithRole(Role::Member);
+
+        $own = Project::factory()->create(['owner_id' => $member->id, 'name' => 'Proyecto de Camila']);
+        ProjectTask::factory()->for($own)->create(['name' => 'Tarea propia sin asignar', 'assignee_id' => null]);
+
+        $foreign = Project::factory()->create(['owner_id' => $teammate->id, 'name' => 'Proyecto de Andrés']);
+        ProjectTask::factory()->for($foreign)->create(['name' => 'Tarea prestada', 'assignee_id' => $member->id]);
+        ProjectTask::factory()->for($foreign)->create(['name' => 'Tarea de otro compañero', 'assignee_id' => $teammate->id]);
+
+        $page = Livewire::actingAs($viewer)->test('pages::projects.timeline')
+            ->set('owner', (string) $member->id)
+            ->set('showTasks', true)
+            ->assertSee('Proyecto de Camila')
+            ->assertSee('Proyecto de Andrés')
+            ->assertSee('Tarea prestada')
+            // Only Camila's own tasks show under the foreign project, not her teammate's.
+            ->assertDontSee('Tarea de otro compañero')
+            // Tasks nobody assigned don't get pulled into her workload.
+            ->assertDontSee('Tarea propia sin asignar');
+
+        $rows = collect($page->instance()->chart['rows'])->keyBy('label');
+        $this->assertNull($rows['Proyecto de Camila']['color']);
+        $this->assertNotNull($rows['Proyecto de Andrés']['color']);
+        $this->assertSame($rows['Proyecto de Andrés']['color'], $rows['Tarea prestada']['color']);
+    }
+
+    public function test_the_person_picker_also_lists_people_with_no_project_of_their_own(): void
+    {
+        $manager = $this->userWithRole(Role::ProjectManager);
+        $assigneeOnly = $this->userWithRole(Role::Member);
+        $project = Project::factory()->create(['owner_id' => $manager->id]);
+        ProjectTask::factory()->for($project)->create(['assignee_id' => $assigneeOnly->id]);
+
+        Livewire::actingAs($manager)->test('pages::projects.timeline')
+            ->assertSee($assigneeOnly->name);
+    }
 }

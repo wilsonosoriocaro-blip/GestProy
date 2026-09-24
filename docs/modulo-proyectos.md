@@ -197,7 +197,8 @@ Lo que se necesita (barras, avance, hoy, retraso, dependencias y zoom) se resuel
 **Vistas:**
 
 - **Detalle del proyecto** (`projects.timeline`): una fila con el proyecto completo y luego sus tareas. Se refresca con el evento `task-saved`. Abre en semanas, o en meses si el proyecto dura más de 4 meses.
-- **`/projects/timeline`** (menú "Cronograma"): una barra por proyecto visible. Filtra por categoría y responsable, opcionalmente incluye finalizados y cancelados, y con "Mostrar tareas de los proyectos" abre debajo de cada proyecto las barras de sus tareas (igual que en el detalle). Apagado por defecto para no cambiar la vista de siempre; las tareas solo se cargan de la base de datos cuando se activa.
+- **`/projects/timeline`** (menú "Cronograma"): una barra por proyecto visible. Filtra por categoría y persona, opcionalmente incluye finalizados y cancelados, y con "Mostrar tareas de los proyectos" abre debajo de cada proyecto las barras de sus tareas (igual que en el detalle). Apagado por defecto para no cambiar la vista de siempre; las tareas solo se cargan de la base de datos cuando se activa.
+- **Carga de trabajo por persona:** el selector de persona lista a cualquiera con un proyecto propio o una tarea asignada (no solo dueños de proyecto). Al elegir a alguien y activar "Mostrar tareas", la vista se vuelve su carga de trabajo completa: su(s) propio(s) proyecto(s) arriba en azul, y debajo cada proyecto ajeno donde tiene tareas asignadas, con un color distinto por proyecto (`GanttColor`, un punto junto al nombre de la fila) para que se note de un vistazo de dónde viene cada tarea. Solo se traen sus tareas, no las de sus compañeros en ese mismo proyecto.
 
 **Qué se dibuja:**
 

@@ -27,12 +27,23 @@ class GanttBuilderTest extends TestCase
         $this->today = CarbonImmutable::parse('2026-09-23');
     }
 
-    private function item(string $key, ?string $start, ?string $end, array $dependsOn = [], bool $open = true, int $progress = 50): GanttItem
+    private function item(string $key, ?string $start, ?string $end, array $dependsOn = [], bool $open = true, int $progress = 50, ?string $color = null): GanttItem
     {
         return new GanttItem($key, ucfirst($key), null, null,
             $start ? CarbonImmutable::parse($start) : null,
             $end ? CarbonImmutable::parse($end) : null,
-            $progress, ScheduleHealth::OnTrack, $open, $dependsOn);
+            $progress, ScheduleHealth::OnTrack, $open, $dependsOn, $color);
+    }
+
+    public function test_rows_carry_the_item_color_for_the_multi_project_workload_view(): void
+    {
+        $chart = $this->builder->build([
+            $this->item('mine', '2026-09-20', '2026-09-25'),
+            $this->item('foreign', '2026-09-20', '2026-09-25', color: 'violet'),
+        ], GanttZoom::Week, $this->today);
+
+        $this->assertNull($chart['rows'][0]['color']);
+        $this->assertSame('violet', $chart['rows'][1]['color']);
     }
 
     public function test_week_zoom_snaps_to_mondays_and_draws_inclusive_bars(): void

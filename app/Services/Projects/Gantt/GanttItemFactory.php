@@ -17,7 +17,7 @@ class GanttItemFactory
      * @param  iterable<ProjectTask>  $tasks
      * @return list<GanttItem>
      */
-    public function fromTasks(iterable $tasks, ?CarbonImmutable $today = null): array
+    public function fromTasks(iterable $tasks, ?CarbonImmutable $today = null, ?GanttColor $color = null): array
     {
         $items = [];
 
@@ -33,6 +33,7 @@ class GanttItemFactory
                 health: $task->schedule($today)->health,
                 isOpen: ! $task->status->kind->lifecycle()->isClosed(),
                 dependsOn: array_values($task->dependencies->map(fn (ProjectTask $dependency): string => 'task-'.$dependency->id)->all()),
+                color: $color?->value,
             );
         }
 
@@ -43,7 +44,7 @@ class GanttItemFactory
      * @param  Collection<int, Project>  $projects
      * @return list<GanttItem>
      */
-    public function fromProjects(Collection $projects, ?CarbonImmutable $today = null): array
+    public function fromProjects(Collection $projects, ?CarbonImmutable $today = null, ?GanttColor $color = null): array
     {
         return array_values($projects->map(fn (Project $project) => new GanttItem(
             key: 'project-'.$project->id,
@@ -55,6 +56,7 @@ class GanttItemFactory
             progress: $project->progress,
             health: $project->schedule($today)->health,
             isOpen: ! $project->status->kind->lifecycle()->isClosed(),
+            color: $color?->value,
         ))->all());
     }
 }

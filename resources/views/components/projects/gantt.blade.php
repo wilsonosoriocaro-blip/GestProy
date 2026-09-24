@@ -86,6 +86,19 @@
                         @php
                             $health = App\Enums\ScheduleHealth::from($row['health']);
                             $summary = $row['label'].': '.$row['dates'].', avance '.$row['progress'].'%, '.$health->label();
+                            // Only set when several projects share this timeline (portfolio view, "por persona"):
+                            // ties every bar back to its project without depending on the health colors.
+                            $barColor = match ($row['color'] ?? null) {
+                                'violet' => 'bg-violet-600 dark:bg-violet-500',
+                                'amber' => 'bg-amber-600 dark:bg-amber-500',
+                                'emerald' => 'bg-emerald-600 dark:bg-emerald-500',
+                                'cyan' => 'bg-cyan-600 dark:bg-cyan-500',
+                                'fuchsia' => 'bg-fuchsia-600 dark:bg-fuchsia-500',
+                                'orange' => 'bg-orange-600 dark:bg-orange-500',
+                                'teal' => 'bg-teal-600 dark:bg-teal-500',
+                                'rose' => 'bg-rose-600 dark:bg-rose-500',
+                                default => 'bg-blue-600 dark:bg-blue-500',
+                            };
                         @endphp
                         <li class="flex border-b border-zinc-100 last:border-b-0 dark:border-zinc-700/60" style="height: {{ $rowHeight }}px" wire:key="gantt-{{ $row['key'] }}">
                             <div class="sticky left-0 z-20 flex shrink-0 flex-col justify-center border-e border-zinc-200 bg-white px-3 dark:border-zinc-700 dark:bg-zinc-800" style="width: var(--gantt-label)">
@@ -95,6 +108,9 @@
                                     <span class="truncate text-sm font-medium text-zinc-800 dark:text-white">{{ $row['label'] }}</span>
                                 @endif
                                 <span class="flex items-center gap-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                                    @if ($row['color'] ?? null)
+                                        <span class="size-2 shrink-0 rounded-full {{ $barColor }}" title="Proyecto: {{ $row['sublabel'] }}" aria-hidden="true"></span>
+                                    @endif
                                     <flux:icon :name="$health->icon()" variant="micro" class="shrink-0" />
                                     <span class="truncate">{{ $health->label() }} · {{ $row['sublabel'] }}</span>
                                 </span>
@@ -102,12 +118,12 @@
 
                             <div class="relative shrink-0" style="width: {{ $chart['width'] }}px">
                                 @if ($row['milestone'])
-                                    <span class="absolute top-1/2 z-10 size-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] bg-blue-600 ring-2 ring-white dark:bg-blue-500 dark:ring-zinc-800"
+                                    <span class="absolute top-1/2 z-10 size-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] {{ $barColor }} ring-2 ring-white dark:ring-zinc-800"
                                         style="left: {{ $row['x'] }}px" title="{{ $summary }}" role="img" aria-label="{{ $summary }}"></span>
                                 @elseif ($row['has_bar'])
                                     <span class="absolute top-3 z-10 h-5 overflow-hidden rounded bg-zinc-300 dark:bg-zinc-600"
                                         style="left: {{ $row['x'] }}px; width: {{ max($row['w'], 4) }}px" title="{{ $summary }}" role="img" aria-label="{{ $summary }}">
-                                        <span class="block h-full bg-blue-600 dark:bg-blue-500" style="width: {{ $row['progress'] }}%"></span>
+                                        <span class="block h-full {{ $barColor }}" style="width: {{ $row['progress'] }}%"></span>
                                     </span>
                                     @if ($row['overdue_w'])
                                         <span class="absolute top-3 z-10 h-5 rounded-e bg-[repeating-linear-gradient(135deg,var(--color-red-600)_0_3px,transparent_3px_7px)] opacity-70 dark:bg-[repeating-linear-gradient(135deg,var(--color-red-500)_0_3px,transparent_3px_7px)]"
@@ -146,5 +162,8 @@
             <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-4 rounded-sm bg-zinc-200 dark:bg-zinc-700"></span>Fin de semana o festivo</span>
         @endif
         <span class="inline-flex items-center gap-1.5"><span class="h-3 border-s-2 border-dashed border-zinc-900 dark:border-white"></span>Hoy</span>
+        @if (collect($rows)->contains(fn ($row) => $row['color'] ?? null))
+            <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-violet-600 dark:bg-violet-500"></span>Un color por proyecto (ver el punto junto a cada fila)</span>
+        @endif
     </div>
 @endif
