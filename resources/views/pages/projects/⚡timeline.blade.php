@@ -28,6 +28,9 @@ new #[Title('Cronograma de proyectos')] class extends Component {
     #[Url(except: false)]
     public bool $includeClosed = false;
 
+    #[Url(except: false)]
+    public bool $showTasks = false;
+
     #[Url(except: 'month')]
     public string $zoom = 'month';
 
@@ -52,15 +55,30 @@ new #[Title('Cronograma de proyectos')] class extends Component {
                 ProjectStatusKind::Cancelled->value,
             ])))
             ->with(['status', 'owner:id,name'])
+            ->when($this->showTasks, fn (Builder $q) => $q->with(['tasks' => fn ($t) => $t->with(['status', 'assignee:id,name', 'dependencies:id'])->orderBy('sort_order')]))
             ->orderByRaw('start_date asc NULLS LAST')
             ->orderBy('due_date')
             ->limit(200)
             ->get();
 
-        return app(GanttBuilder::class)->build(
-            app(GanttItemFactory::class)->fromProjects($projects),
-            GanttZoom::tryFrom($this->zoom) ?? GanttZoom::Month,
-        );
+        $zoom = GanttZoom::tryFrom($this->zoom) ?? GanttZoom::Month;
+        $factory = app(GanttItemFactory::class);
+        $projectItems = $factory->fromProjects($projects);
+
+        if (! $this->showTasks) {
+            return app(GanttBuilder::class)->build($projectItems, $zoom);
+        }
+
+        // Each project's row followed by the bars of its own tasks, so the
+        // portfolio timeline reads as grouped sections rather than one flat list.
+        $items = [];
+
+        foreach ($projects as $i => $project) {
+            $items[] = $projectItems[$i];
+            array_push($items, ...$factory->fromTasks($project->tasks));
+        }
+
+        return app(GanttBuilder::class)->build($items, $zoom);
     }
 
     /**
@@ -109,10 +127,11 @@ new #[Title('Cronograma de proyectos')] class extends Component {
             </flux:select>
         </div>
         <flux:checkbox wire:model.live="includeClosed" label="Incluir finalizados y cancelados" />
-        <flux:text class="ms-auto text-sm" wire:loading wire:target="category, owner, includeClosed, zoom">Actualizando…</flux:text>
+        <flux:checkbox wire:model.live="showTasks" label="Mostrar tareas de los proyectos" />
+        <flux:text class="ms-auto text-sm" wire:loading wire:target="category, owner, includeClosed, showTasks, zoom">Actualizando…</flux:text>
     </div>
 
-    <div wire:loading.class="opacity-60" wire:target="category, owner, includeClosed, zoom" class="transition-opacity">
+    <div wire:loading.class="opacity-60" wire:target="category, owner, includeClosed, showTasks, zoom" class="transition-opacity">
         <x-projects.gantt :chart="$this->chart" id="portfolio" label="Cronograma del portafolio" />
     </div>
 </section>
