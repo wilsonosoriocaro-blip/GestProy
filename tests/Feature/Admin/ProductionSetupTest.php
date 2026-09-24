@@ -37,6 +37,17 @@ class ProductionSetupTest extends TestCase
         Notification::assertSentTo($admin, ResetPassword::class);
     }
 
+    public function test_create_admin_command_works_before_roles_are_seeded(): void
+    {
+        Notification::fake();
+        $this->assertDatabaseCount('roles', 0);
+
+        $this->artisan('projects:create-admin', ['--email' => 'ti@empresa.co', '--name' => 'Mesa TI'])->assertSuccessful();
+
+        $this->assertDatabaseCount('roles', count(Role::cases()));
+        $this->assertTrue(User::where('email', 'ti@empresa.co')->sole()->hasRole(Role::Admin->value));
+    }
+
     public function test_create_admin_command_can_ask_for_a_strong_password(): void
     {
         $this->seedProjectsModule();
