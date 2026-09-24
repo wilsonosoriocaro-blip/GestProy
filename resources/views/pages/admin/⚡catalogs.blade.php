@@ -1,10 +1,12 @@
 <?php
 
+use App\Enums\Permission;
 use App\Actions\Catalogs\ManageCatalogs;
 use App\Services\Catalogs\CatalogRegistry;
 use Flux\Flux;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
@@ -12,6 +14,15 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 new #[Title('Catálogos')] class extends Component {
+
+    /**
+     * Checked on every request, not only by the route: the component stays
+     * protected wherever it is rendered.
+     */
+    public function boot(): void
+    {
+        abort_unless(Auth::user()?->can(Permission::CatalogsManage->value), 403);
+    }
     #[Url(except: 'categories')]
     public string $type = 'categories';
 
@@ -52,9 +63,11 @@ new #[Title('Catálogos')] class extends Component {
         $query = $catalog['model']::query();
         $query = $catalog['level'] ? $query->orderByDesc('level') : $query->orderBy('sort_order')->orderBy('name');
 
+        $usage = CatalogRegistry::usageCounts($this->type);
+
         return $query->get()->map(fn ($entry) => [
             'entry' => $entry,
-            'usage' => CatalogRegistry::usage($this->type, (int) $entry->getKey()),
+            'usage' => $usage[(int) $entry->getKey()] ?? 0,
         ]);
     }
 

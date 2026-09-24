@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\Permission;
 use App\Actions\Users\ManageUsers;
 use App\Enums\Role;
 use App\Models\User;
@@ -16,6 +17,15 @@ use Livewire\WithPagination;
 
 new #[Title('Usuarios')] class extends Component {
     use WithPagination;
+
+    /**
+     * Checked on every request, not only by the route: the component stays
+     * protected wherever it is rendered.
+     */
+    public function boot(): void
+    {
+        abort_unless(Auth::user()?->can(Permission::UsersManage->value), 403);
+    }
 
     #[Url(except: '')]
     public string $search = '';

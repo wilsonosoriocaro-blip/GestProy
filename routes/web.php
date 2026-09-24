@@ -2,7 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+// No public landing page: the app starts at the dashboard (guests go to login).
+Route::redirect('/', '/dashboard')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // The executive dashboard of the projects module is the home of the app.

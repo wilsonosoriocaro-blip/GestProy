@@ -310,7 +310,31 @@ En producción hay que correr:
 
 En desarrollo, `composer dev` ya levanta el worker.
 
-## Pendiente para fases siguientes
+## Fase 9: optimización, seguridad y despliegue
 
-- Los enlaces "Repository" y "Documentation" del menú lateral vienen del starter kit; se pueden quitar cuando se defina la navegación final.
-- Índices trigram (`pg_trgm`) para la búsqueda si el volumen lo pide (fase 9).
+**Rendimiento.** `tests/Feature/Projects/QueryCountTest.php` mide cuántas consultas hace cada pantalla con 2 y con 10 proyectos y exige que sea el mismo número. Si alguien mete un N+1, esa prueba falla.
+
+Consultas por pantalla (constantes, sin importar el volumen): listado 14, tablero 24, cronograma 5, ficha 21, tareas 10, historial 2, bitácora 4, usuarios 7, auditoría 2.
+
+Probado con 2.000 proyectos, 40.000 tareas y 100.000 registros de historial: todos los planes de PostgreSQL quedaron por debajo de 25 ms. La búsqueda más cara tardó 6,6 ms, así que no se agregó `pg_trgm` (el OR con el responsable tampoco lo dejaría usar el índice).
+
+El administrador de catálogos contaba el uso de cada valor con una consulta por fila; ahora es una sola consulta agrupada (`CatalogRegistry::usageCounts`).
+
+**Seguridad.**
+
+- Los componentes de administración (usuarios, catálogos, auditoría) revisan el permiso en `boot()`, en cada petición, no solo en la ruta.
+- El seeder no crea `admin@example.com` en producción. El primer administrador se crea con `php artisan projects:create-admin --email=...` (manda enlace para definir contraseña, o `--with-password` la pide con reglas fuertes).
+- Middleware `SecurityHeaders`: nosniff, X-Frame-Options, Referrer-Policy, Permissions-Policy y HSTS bajo HTTPS.
+- Revisión de salidas sin escapar y SQL crudo: solo quedan valores de listas blancas o enums.
+
+**Limpieza del starter kit.** Se quitaron la vista de bienvenida, el layout de cabecera sin uso y los enlaces a Repository/Documentation. `/` redirige al tablero. Toda la interfaz del kit (login, ajustes, 2FA, correos) quedó en español.
+
+**Despliegue.** Guía completa en [despliegue.md](despliegue.md): `.env` de producción, Nginx, Supervisor, cron, actualizaciones y copias de seguridad.
+
+## Pendiente a futuro
+
+- Índices trigram (`pg_trgm`) si la búsqueda se vuelve lenta con más volumen del medido.
+- Cambiar el logo del kit por el de la empresa.
+- Arrastrar barras en el Gantt para mover fechas.
+- Interfaz para subtareas (el modelo ya soporta `parent_id`).
+- Probar el webhook de Teams contra un canal real.

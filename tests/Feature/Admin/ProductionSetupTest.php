@@ -1,0 +1,62 @@
+<?php
+
+namespace Tests\Feature\Admin;
+
+use App\Enums\Role;
+use App\Models\User;
+use Database\Seeders\DatabaseSeeder;
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
+use Tests\Concerns\CreatesProjectUsers;
+use Tests\TestCase;
+
+class ProductionSetupTest extends TestCase
+{
+    use CreatesProjectUsers, RefreshDatabase;
+
+    public function test_seeder_creates_no_default_admin_in_production(): void
+    {
+        $this->app->detectEnvironment(fn () => 'production');
+
+        $this->artisan('db:seed', ['--class' => DatabaseSeeder::class, '--force' => true])->assertSuccessful();
+
+        $this->assertSame(0, User::count());
+        $this->assertDatabaseCount('roles', 5);
+    }
+
+    public function test_create_admin_command_sends_a_password_link(): void
+    {
+        Notification::fake();
+        $this->seedProjectsModule();
+
+        $this->artisan('projects:create-admin', ['--email' => 'TI@Empresa.co', '--name' => 'Mesa TI'])->assertSuccessful();
+
+        $admin = User::where('email', 'ti@empresa.co')->sole();
+        $this->assertTrue($admin->hasRole(Role::Admin->value));
+        Notification::assertSentTo($admin, ResetPassword::class);
+    }
+
+    public function test_create_admin_command_can_ask_for_a_strong_password(): void
+    {
+        $this->seedProjectsModule();
+
+        $this->artisan('projects:create-admin', ['--email' => 'ti@empresa.co', '--name' => 'Mesa TI', '--with-password' => true])
+            ->expectsQuestion('Contraseña (mínimo 12 caracteres, mayúsculas, números y símbolos)', 'corta')
+            ->assertFailed();
+
+        $this->artisan('projects:create-admin', ['--email' => 'ti@empresa.co', '--name' => 'Mesa TI', '--with-password' => true])
+            ->expectsQuestion('Contraseña (mínimo 12 caracteres, mayúsculas, números y símbolos)', 'Clave-Segura-2026!')
+            ->assertSuccessful();
+
+        $this->post(route('login.store'), ['email' => 'ti@empresa.co', 'password' => 'Clave-Segura-2026!'])->assertSessionHasNoErrors();
+    }
+
+    public function test_security_headers_are_sent(): void
+    {
+        $this->get(route('login'))
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
+            ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    }
+}
