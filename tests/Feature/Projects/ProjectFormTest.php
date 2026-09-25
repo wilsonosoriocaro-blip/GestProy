@@ -171,6 +171,20 @@ class ProjectFormTest extends TestCase
         $this->assertSame(0, $project->refresh()->progress);
     }
 
+    public function test_a_cleared_manual_progress_is_a_validation_error_not_a_crash(): void
+    {
+        $leader = $this->userWithRole(Role::Leader);
+        $project = Project::factory()->manualProgress(40)->create();
+
+        Livewire::actingAs($leader)->test('pages::projects.form', ['project' => $project])
+            ->assertSeeHtml('wire:key="project-progress"')
+            ->set('form.progress', '')
+            ->call('save')
+            ->assertHasErrors('form.progress');
+
+        $this->assertSame(40, $project->refresh()->progress);
+    }
+
     public function test_team_member_cannot_save_the_form(): void
     {
         $member = $this->userWithRole(Role::Member);

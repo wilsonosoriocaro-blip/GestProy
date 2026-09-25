@@ -24,5 +24,7 @@ final readonly class GanttItem
         public ScheduleHealth $health,
         public bool $isOpen,
         public array $dependsOn = [],
+        /** Tailwind color key (see GanttColor) that marks which project this row belongs to; null draws the default blue. */
+        public ?string $color = null,
     ) {}
 }

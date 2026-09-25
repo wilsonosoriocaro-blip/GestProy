@@ -36,9 +36,10 @@ class TaskForm extends Form
 
     public string $completed_at = '';
 
-    public int $progress = 0;
+    // Nullable: a cleared number input arrives as null and must fail validation, not the type.
+    public ?int $progress = 0;
 
-    public int $weight = 1;
+    public ?int $weight = 1;
 
     public string $notes = '';
 

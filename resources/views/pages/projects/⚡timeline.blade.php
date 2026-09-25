@@ -5,6 +5,7 @@ use App\Models\Project;
 use App\Models\ProjectCategory;
 use App\Models\User;
 use App\Services\Projects\Gantt\GanttBuilder;
+use App\Services\Projects\Gantt\GanttColor;
 use App\Services\Projects\Gantt\GanttItemFactory;
 use App\Services\Projects\Gantt\GanttZoom;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,7 +17,11 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * Portfolio timeline: one bar per project the user can see.
+ * Portfolio timeline: one bar per project the user can see. When a person
+ * is selected and "Mostrar tareas" is on, this becomes that person's
+ * workload: their own project(s), plus the tasks assigned to them in
+ * every other project, each foreign project drawn in its own color so
+ * a task's origin is obvious without opening it.
  */
 new #[Title('Cronograma de proyectos')] class extends Component {
     #[Url(except: '')]
@@ -40,30 +45,47 @@ new #[Title('Cronograma de proyectos')] class extends Component {
     }
 
     /**
+     * Base filters shared by the person's own projects and, when a person
+     * is selected, the search for their tasks in other people's projects.
+     *
+     * @param  Builder<Project>  $query
+     * @return Builder<Project>
+     */
+    private function scoped(Builder $query): Builder
+    {
+        return $query
+            ->visibleTo(Auth::user())
+            ->notArchived()
+            ->when($this->category !== '', fn (Builder $q) => $q->where('category_id', (int) $this->category))
+            ->unless($this->includeClosed, fn (Builder $q) => $q->whereHas('status', fn (Builder $s) => $s->whereNotIn('kind', [
+                ProjectStatusKind::Completed->value,
+                ProjectStatusKind::Cancelled->value,
+            ])));
+    }
+
+    /**
      * @return array<string, mixed>
      */
     #[Computed]
     public function chart(): array
     {
-        $projects = Project::query()
-            ->visibleTo(Auth::user())
-            ->notArchived()
-            ->when($this->category !== '', fn (Builder $q) => $q->where('category_id', (int) $this->category))
-            ->when($this->owner !== '', fn (Builder $q) => $q->where('owner_id', (int) $this->owner))
-            ->unless($this->includeClosed, fn (Builder $q) => $q->whereHas('status', fn (Builder $s) => $s->whereNotIn('kind', [
-                ProjectStatusKind::Completed->value,
-                ProjectStatusKind::Cancelled->value,
-            ])))
+        $zoom = GanttZoom::tryFrom($this->zoom) ?? GanttZoom::Month;
+        $factory = app(GanttItemFactory::class);
+        $ownerId = $this->owner !== '' ? (int) $this->owner : null;
+
+        $ownedProjects = $this->scoped(Project::query())
+            ->when($ownerId !== null, fn (Builder $q) => $q->where('owner_id', $ownerId))
             ->with(['status', 'owner:id,name'])
-            ->when($this->showTasks, fn (Builder $q) => $q->with(['tasks' => fn ($t) => $t->with(['status', 'assignee:id,name', 'dependencies:id'])->orderBy('sort_order')]))
+            ->when($this->showTasks, fn (Builder $q) => $q->with(['tasks' => fn ($t) => $t
+                ->when($ownerId !== null, fn ($t) => $t->where('assignee_id', $ownerId))
+                ->with(['status', 'assignee:id,name', 'dependencies:id'])
+                ->orderBy('sort_order')]))
             ->orderByRaw('start_date asc NULLS LAST')
             ->orderBy('due_date')
             ->limit(200)
             ->get();
 
-        $zoom = GanttZoom::tryFrom($this->zoom) ?? GanttZoom::Month;
-        $factory = app(GanttItemFactory::class);
-        $projectItems = $factory->fromProjects($projects);
+        $projectItems = $factory->fromProjects($ownedProjects);
 
         if (! $this->showTasks) {
             return app(GanttBuilder::class)->build($projectItems, $zoom);
@@ -73,9 +95,35 @@ new #[Title('Cronograma de proyectos')] class extends Component {
         // portfolio timeline reads as grouped sections rather than one flat list.
         $items = [];
 
-        foreach ($projects as $i => $project) {
+        foreach ($ownedProjects as $i => $project) {
             $items[] = $projectItems[$i];
             array_push($items, ...$factory->fromTasks($project->tasks));
+        }
+
+        if ($ownerId === null) {
+            return app(GanttBuilder::class)->build($items, $zoom);
+        }
+
+        // A person's full workload also covers tasks assigned to them in
+        // projects someone else owns. One color per foreign project so a
+        // task's origin reads at a glance; their own project(s) above stay
+        // the default blue.
+        $otherProjects = $this->scoped(Project::query())
+            ->whereKeyNot($ownedProjects->pluck('id'))
+            ->whereHas('tasks', fn (Builder $q) => $q->where('assignee_id', $ownerId))
+            ->with(['status', 'owner:id,name'])
+            ->with(['tasks' => fn ($t) => $t->where('assignee_id', $ownerId)
+                ->with(['status', 'assignee:id,name', 'dependencies:id'])
+                ->orderBy('sort_order')])
+            ->orderByRaw('start_date asc NULLS LAST')
+            ->orderBy('due_date')
+            ->limit(50)
+            ->get();
+
+        foreach ($otherProjects as $i => $project) {
+            $color = GanttColor::cycle($i);
+            $items[] = $factory->fromProjects(collect([$project]), color: $color)[0];
+            array_push($items, ...$factory->fromTasks($project->tasks, color: $color));
         }
 
         return app(GanttBuilder::class)->build($items, $zoom);
@@ -91,12 +139,20 @@ new #[Title('Cronograma de proyectos')] class extends Component {
     }
 
     /**
+     * Anyone with a project to their name or a task assigned to them, so
+     * the picker works for the workload view and not only project owners.
+     *
      * @return Collection<int, User>
      */
     #[Computed]
     public function owners(): Collection
     {
-        return User::query()->whereHas('ownedProjects', fn ($q) => $q->visibleTo(Auth::user()))->orderBy('name')->get(['id', 'name']);
+        return User::query()
+            ->where(fn ($q) => $q
+                ->whereHas('ownedProjects', fn ($p) => $p->visibleTo(Auth::user()))
+                ->orWhereHas('assignedTasks.project', fn ($p) => $p->visibleTo(Auth::user())))
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 }; ?>
 
@@ -119,8 +175,8 @@ new #[Title('Cronograma de proyectos')] class extends Component {
             </flux:select>
         </div>
         <div class="w-52">
-            <flux:select wire:model.live="owner" aria-label="Responsable">
-                <flux:select.option value="">Todos los responsables</flux:select.option>
+            <flux:select wire:model.live="owner" aria-label="Persona">
+                <flux:select.option value="">Todas las personas</flux:select.option>
                 @foreach ($this->owners as $option)
                     <flux:select.option :value="$option->id" wire:key="own-{{ $option->id }}">{{ $option->name }}</flux:select.option>
                 @endforeach
@@ -130,6 +186,14 @@ new #[Title('Cronograma de proyectos')] class extends Component {
         <flux:checkbox wire:model.live="showTasks" label="Mostrar tareas de los proyectos" />
         <flux:text class="ms-auto text-sm" wire:loading wire:target="category, owner, includeClosed, showTasks, zoom">Actualizando…</flux:text>
     </div>
+
+    @if ($owner !== '' && $showTasks)
+        <flux:callout icon="information-circle" variant="secondary">
+            <flux:callout.text>
+                Cronograma de {{ $this->owners->firstWhere('id', (int) $owner)?->name }}: su propio proyecto arriba, en azul, y debajo las tareas que tiene asignadas en otros proyectos, cada uno con un color distinto.
+            </flux:callout.text>
+        </flux:callout>
+    @endif
 
     <div wire:loading.class="opacity-60" wire:target="category, owner, includeClosed, showTasks, zoom" class="transition-opacity">
         <x-projects.gantt :chart="$this->chart" id="portfolio" label="Cronograma del portafolio" />

@@ -181,10 +181,12 @@ new class extends Component {
                     @endforeach
                 </flux:select>
 
+                {{-- Distinct keys: without them the morph reuses the same <input> and keeps
+                     its original wire:model, so a date typed here landed in form.progress. --}}
                 @if ($this->isCompleted)
-                    <flux:input type="date" wire:model="form.completed_at" label="Finalización real (vacío = hoy)" />
+                    <flux:input type="date" wire:model="form.completed_at" wire:key="task-completed-at" label="Finalización real (vacío = hoy)" />
                 @else
-                    <flux:input type="number" wire:model="form.progress" label="Avance (%)" min="0" max="100" step="1" />
+                    <flux:input type="number" wire:model="form.progress" wire:key="task-progress" label="Avance (%)" min="0" max="100" step="1" />
                 @endif
 
                 @if ($mode === 'full')
