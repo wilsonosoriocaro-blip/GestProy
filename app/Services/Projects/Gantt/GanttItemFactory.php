@@ -2,6 +2,7 @@
 
 namespace App\Services\Projects\Gantt;
 
+use App\Enums\ScheduleCompliance;
 use App\Models\Project;
 use App\Models\ProjectTask;
 use Carbon\CarbonImmutable;
@@ -17,11 +18,12 @@ class GanttItemFactory
      * @param  iterable<ProjectTask>  $tasks
      * @return list<GanttItem>
      */
-    public function fromTasks(iterable $tasks, ?CarbonImmutable $today = null, ?GanttColor $color = null): array
+    public function fromTasks(iterable $tasks, ?CarbonImmutable $today = null, ?GanttColor $color = null, bool $withCompliance = false): array
     {
         $items = [];
 
         foreach ($tasks as $task) {
+            $health = $task->schedule($today)->health;
             $items[] = new GanttItem(
                 key: 'task-'.$task->id,
                 label: $task->name,
@@ -30,10 +32,11 @@ class GanttItemFactory
                 start: $task->start_date,
                 end: $task->due_date,
                 progress: $task->progress,
-                health: $task->schedule($today)->health,
+                health: $health,
                 isOpen: ! $task->status->kind->lifecycle()->isClosed(),
                 dependsOn: array_values($task->dependencies->map(fn (ProjectTask $dependency): string => 'task-'.$dependency->id)->all()),
                 color: $color?->value,
+                compliance: $withCompliance ? ScheduleCompliance::fromHealth($health)->value : null,
             );
         }
 

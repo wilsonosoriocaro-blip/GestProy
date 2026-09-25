@@ -99,6 +99,25 @@
                                 'rose' => 'bg-rose-600 dark:bg-rose-500',
                                 default => 'bg-blue-600 dark:bg-blue-500',
                             };
+                            // Single-project view: the bar says whether the task keeps its dates.
+                            // Fixed status steps (same in both themes), always paired with icon + label.
+                            $compliance = App\Enums\ScheduleCompliance::tryFrom($row['compliance'] ?? '');
+                            if ($compliance) {
+                                $barColor = match ($compliance) {
+                                    App\Enums\ScheduleCompliance::Meeting => 'bg-[#0ca30c]',
+                                    App\Enums\ScheduleCompliance::AtRisk => 'bg-[#fab219]',
+                                    App\Enums\ScheduleCompliance::Failing => 'bg-[#d03b3b]',
+                                    App\Enums\ScheduleCompliance::Neutral => 'bg-zinc-400',
+                                };
+                                $chipColor = match ($compliance) {
+                                    App\Enums\ScheduleCompliance::Meeting => 'bg-[#e3f6e3] text-[#0a6b0a] dark:bg-[#0ca30c]/20 dark:text-[#7ee07e]',
+                                    App\Enums\ScheduleCompliance::AtRisk => 'bg-[#fff4d6] text-[#8a5a00] dark:bg-[#fab219]/20 dark:text-[#fbd27a]',
+                                    App\Enums\ScheduleCompliance::Failing => 'bg-[#fbe4e4] text-[#a02525] dark:bg-[#d03b3b]/25 dark:text-[#f3a3a3]',
+                                    App\Enums\ScheduleCompliance::Neutral => 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300',
+                                };
+                                $chipLabel = $compliance->label();
+                                $summary .= ', '.$chipLabel;
+                            }
                         @endphp
                         <li class="flex border-b border-zinc-100 last:border-b-0 dark:border-zinc-700/60" style="height: {{ $rowHeight }}px" wire:key="gantt-{{ $row['key'] }}">
                             <div class="sticky left-0 z-20 flex shrink-0 flex-col justify-center border-e border-zinc-200 bg-white px-3 dark:border-zinc-700 dark:bg-zinc-800" style="width: var(--gantt-label)">
@@ -108,6 +127,12 @@
                                     <span class="truncate text-sm font-medium text-zinc-800 dark:text-white">{{ $row['label'] }}</span>
                                 @endif
                                 <span class="flex items-center gap-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
+                                    {{-- Neutral (por iniciar, en pausa, sin fechas) is already named by the state text next to it. --}}
+                                    @if ($compliance && $compliance !== App\Enums\ScheduleCompliance::Neutral)
+                                        <span class="inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 text-[10.5px] font-semibold {{ $chipColor }}">
+                                            <flux:icon :name="$compliance->icon()" variant="micro" class="size-3" />{{ $chipLabel }}
+                                        </span>
+                                    @endif
                                     @if ($row['color'] ?? null)
                                         <span class="size-2 shrink-0 rounded-full {{ $barColor }}" title="Proyecto: {{ $row['sublabel'] }}" aria-hidden="true"></span>
                                     @endif
@@ -162,6 +187,14 @@
             <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-4 rounded-sm bg-zinc-200 dark:bg-zinc-700"></span>Fin de semana o festivo</span>
         @endif
         <span class="inline-flex items-center gap-1.5"><span class="h-3 border-s-2 border-dashed border-zinc-900 dark:border-white"></span>Hoy</span>
+        @if (collect($rows)->contains(fn ($row) => $row['compliance'] ?? null))
+            <span class="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-6 rounded-sm bg-[#0ca30c]"></span>Tarea cumpliendo</span>
+                <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-6 rounded-sm bg-[#fab219]"></span>Tarea en riesgo</span>
+                <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-6 rounded-sm bg-[#d03b3b]"></span>Tarea incumpliendo</span>
+                <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-6 rounded-sm bg-zinc-400"></span>Por iniciar</span>
+            </span>
+        @endif
         @if (collect($rows)->contains(fn ($row) => $row['color'] ?? null))
             <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-violet-600 dark:bg-violet-500"></span>Un color por proyecto (ver el punto junto a cada fila)</span>
         @endif
