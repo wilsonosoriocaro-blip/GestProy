@@ -26,5 +26,7 @@ final readonly class GanttItem
         public array $dependsOn = [],
         /** Tailwind color key (see GanttColor) that marks which project this row belongs to; null draws the default blue. */
         public ?string $color = null,
+        /** ScheduleCompliance value: colors the bar by "keeping its dates or not" (single-project view). */
+        public ?string $compliance = null,
     ) {}
 }

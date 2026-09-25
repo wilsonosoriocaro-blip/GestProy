@@ -108,6 +108,7 @@ class GanttBuilder
             'health' => $item->health->value,
             'dates' => $this->dateLabel($item),
             'color' => $item->color,
+            'compliance' => $item->compliance,
             'has_bar' => false,
             'milestone' => false,
             'x' => 0,

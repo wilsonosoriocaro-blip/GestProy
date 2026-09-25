@@ -1,12 +1,14 @@
 <?php
 
 use App\Enums\ProjectStatusKind;
+use App\Enums\ScheduleCompliance;
 use App\Models\Project;
 use App\Models\ProjectCategory;
 use App\Models\User;
 use App\Services\Projects\Gantt\GanttBuilder;
 use App\Services\Projects\Gantt\GanttColor;
 use App\Services\Projects\Gantt\GanttItemFactory;
+use App\Services\Projects\Gantt\GanttItem;
 use App\Services\Projects\Gantt\GanttZoom;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -21,7 +23,9 @@ use Livewire\Component;
  * is selected and "Mostrar tareas" is on, this becomes that person's
  * workload: their own project(s), plus the tasks assigned to them in
  * every other project, each foreign project drawn in its own color so
- * a task's origin is obvious without opening it.
+ * a task's origin is obvious without opening it. When one project is
+ * picked, it shows that project and all its tasks, each bar colored by
+ * whether the task is keeping its dates.
  */
 new #[Title('Cronograma de proyectos')] class extends Component {
     #[Url(except: '')]
@@ -38,6 +42,9 @@ new #[Title('Cronograma de proyectos')] class extends Component {
 
     #[Url(except: 'month')]
     public string $zoom = 'month';
+
+    #[Url(except: '')]
+    public string $project = '';
 
     public function updatedZoom(): void
     {
@@ -64,12 +71,72 @@ new #[Title('Cronograma de proyectos')] class extends Component {
     }
 
     /**
+     * The project picked in the project filter, when the user may see it.
+     */
+    #[Computed]
+    public function selectedProject(): ?Project
+    {
+        if ($this->project === '') {
+            return null;
+        }
+
+        // Picking a project overrides category, person and "include closed":
+        // only visibility and archiving still apply.
+        return Project::query()
+            ->visibleTo(Auth::user())
+            ->notArchived()
+            ->with(['status', 'owner:id,name', 'tasks' => fn ($t) => $t
+                ->with(['status', 'assignee:id,name', 'dependencies:id'])
+                ->orderBy('sort_order')
+                ->orderByRaw('start_date asc NULLS LAST')])
+            ->find((int) $this->project);
+    }
+
+    /**
+     * Single-project view: the project on top, then every task colored by
+     * whether it is keeping its dates.
+     *
+     * @return list<GanttItem>
+     */
+    private function projectItems(Project $project): array
+    {
+        $factory = app(GanttItemFactory::class);
+
+        return [
+            ...$factory->fromProjects(collect([$project])),
+            ...$factory->fromTasks($project->tasks, withCompliance: true),
+        ];
+    }
+
+    /**
+     * Task count per compliance group for the selected project.
+     *
+     * @return array<string, int>
+     */
+    #[Computed]
+    public function compliance(): array
+    {
+        $counts = array_fill_keys(array_map(fn (ScheduleCompliance $c) => $c->value, ScheduleCompliance::cases()), 0);
+
+        foreach ($this->selectedProject?->tasks ?? [] as $task) {
+            $counts[ScheduleCompliance::fromHealth($task->schedule()->health)->value]++;
+        }
+
+        return $counts;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     #[Computed]
     public function chart(): array
     {
         $zoom = GanttZoom::tryFrom($this->zoom) ?? GanttZoom::Month;
+
+        if ($this->selectedProject) {
+            return app(GanttBuilder::class)->build($this->projectItems($this->selectedProject), $zoom);
+        }
+
         $factory = app(GanttItemFactory::class);
         $ownerId = $this->owner !== '' ? (int) $this->owner : null;
 
@@ -130,6 +197,18 @@ new #[Title('Cronograma de proyectos')] class extends Component {
     }
 
     /**
+     * Projects for the project filter: what the user can see, narrowed by
+     * the category and "include closed" filters.
+     *
+     * @return Collection<int, Project>
+     */
+    #[Computed]
+    public function projectOptions(): Collection
+    {
+        return $this->scoped(Project::query())->orderBy('name')->get(['id', 'code', 'name']);
+    }
+
+    /**
      * @return Collection<int, ProjectCategory>
      */
     #[Computed(persist: true)]
@@ -182,12 +261,46 @@ new #[Title('Cronograma de proyectos')] class extends Component {
                 @endforeach
             </flux:select>
         </div>
+        <div class="w-64">
+            <flux:select wire:model.live="project" aria-label="Proyecto">
+                <flux:select.option value="">Todos los proyectos</flux:select.option>
+                @foreach ($this->projectOptions as $option)
+                    <flux:select.option :value="$option->id" wire:key="prj-{{ $option->id }}">{{ $option->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+        </div>
         <flux:checkbox wire:model.live="includeClosed" label="Incluir finalizados y cancelados" />
         <flux:checkbox wire:model.live="showTasks" label="Mostrar tareas de los proyectos" />
-        <flux:text class="ms-auto text-sm" wire:loading wire:target="category, owner, includeClosed, showTasks, zoom">Actualizando…</flux:text>
+        <flux:text class="ms-auto text-sm" wire:loading wire:target="category, owner, includeClosed, showTasks, zoom, project">Actualizando…</flux:text>
     </div>
 
-    @if ($owner !== '' && $showTasks)
+    @if ($this->selectedProject)
+        <section aria-label="Cumplimiento de las tareas de {{ $this->selectedProject->name }}" class="flex flex-col gap-2">
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                @foreach (ScheduleCompliance::cases() as $group)
+                    <div wire:key="compliance-{{ $group->value }}" class="flex items-center gap-3 rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-700">
+                        <span @class([
+                            'size-2.5 shrink-0 rounded-sm',
+                            'bg-[#0ca30c]' => $group === ScheduleCompliance::Meeting,
+                            'bg-[#fab219]' => $group === ScheduleCompliance::AtRisk,
+                            'bg-[#d03b3b]' => $group === ScheduleCompliance::Failing,
+                            'bg-zinc-400' => $group === ScheduleCompliance::Neutral,
+                        ])></span>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1 text-sm font-medium text-zinc-800 dark:text-white">
+                                <flux:icon :name="$group->icon()" variant="micro" />{{ $group->label() }}
+                            </div>
+                            <div class="truncate text-xs text-zinc-500 dark:text-zinc-400">{{ $group->description() }}</div>
+                        </div>
+                        <span class="ms-auto text-xl font-semibold tabular-nums text-zinc-800 dark:text-white">{{ $this->compliance[$group->value] }}</span>
+                    </div>
+                @endforeach
+            </div>
+            <flux:text class="text-xs">Mostrando todas las tareas de {{ $this->selectedProject->code }}. Con un proyecto elegido no aplican los filtros de categoría, persona ni finalizados.</flux:text>
+        </section>
+    @endif
+
+    @if ($owner !== '' && $showTasks && ! $this->selectedProject)
         <flux:callout icon="information-circle" variant="secondary">
             <flux:callout.text>
                 Cronograma de {{ $this->owners->firstWhere('id', (int) $owner)?->name }}: su propio proyecto arriba, en azul, y debajo las tareas que tiene asignadas en otros proyectos, cada uno con un color distinto.
@@ -195,7 +308,7 @@ new #[Title('Cronograma de proyectos')] class extends Component {
         </flux:callout>
     @endif
 
-    <div wire:loading.class="opacity-60" wire:target="category, owner, includeClosed, showTasks, zoom" class="transition-opacity">
+    <div wire:loading.class="opacity-60" wire:target="category, owner, includeClosed, showTasks, zoom, project" class="transition-opacity">
         <x-projects.gantt :chart="$this->chart" id="portfolio" label="Cronograma del portafolio" />
     </div>
 </section>

@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Models\Project;
 use App\Models\ProjectStatus;
 use App\Models\ProjectTask;
+use App\Models\ProjectTaskStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesProjectUsers;
@@ -136,6 +137,65 @@ class TimelineTest extends TestCase
         $this->assertNull($rows['Proyecto de Camila']['color']);
         $this->assertNotNull($rows['Proyecto de Andrés']['color']);
         $this->assertSame($rows['Proyecto de Andrés']['color'], $rows['Tarea prestada']['color']);
+    }
+
+    public function test_picking_a_project_breaks_it_down_into_tasks_colored_by_compliance(): void
+    {
+        $viewer = $this->userWithRole(Role::Leader);
+        $project = Project::factory()->create(['name' => 'Desarrollo módulo de Aduana', 'start_date' => '2026-09-01', 'due_date' => '2026-10-30']);
+        Project::factory()->create(['name' => 'Otro proyecto']);
+
+        $running = ProjectTaskStatus::where('slug', 'en-ejecucion')->value('id');
+        $done = ProjectTaskStatus::where('slug', 'finalizada')->value('id');
+        ProjectTask::factory()->for($project)->create(['name' => 'Al día', 'status_id' => $running, 'start_date' => '2026-09-21', 'due_date' => '2026-10-16', 'progress' => 20]);
+        ProjectTask::factory()->for($project)->create(['name' => 'Vencida', 'status_id' => $running, 'start_date' => '2026-09-01', 'due_date' => '2026-09-15', 'progress' => 50]);
+        ProjectTask::factory()->for($project)->create(['name' => 'Terminada', 'status_id' => $done, 'start_date' => '2026-09-01', 'due_date' => '2026-09-10', 'progress' => 100, 'completed_at' => '2026-09-09']);
+
+        $page = Livewire::actingAs($viewer)->test('pages::projects.timeline')
+            ->set('project', (string) $project->id)
+            ->assertSee('Desarrollo módulo de Aduana')
+            ->assertSee('Cumpliendo')
+            ->assertSee('Incumpliendo')
+            ->assertSee('Tarea incumpliendo');
+
+        $rows = collect($page->instance()->chart['rows'])->keyBy('label');
+        // The project first, then only its own tasks (never "Otro proyecto").
+        $this->assertSame('Desarrollo módulo de Aduana', $rows->keys()->first());
+        $this->assertEqualsCanonicalizing(['Desarrollo módulo de Aduana', 'Al día', 'Vencida', 'Terminada'], $rows->keys()->all());
+        $this->assertNull($rows['Desarrollo módulo de Aduana']['compliance']);
+        $this->assertSame('failing', $rows['Vencida']['compliance']);
+        $this->assertSame('meeting', $rows['Terminada']['compliance']);
+        $this->assertSame(1, $page->instance()->compliance['failing']);
+        $this->assertSame(3, array_sum($page->instance()->compliance));
+    }
+
+    public function test_without_a_project_the_timeline_has_no_compliance_colors(): void
+    {
+        $viewer = $this->userWithRole(Role::Leader);
+        $project = Project::factory()->create();
+        ProjectTask::factory()->for($project)->create();
+
+        $page = Livewire::actingAs($viewer)->test('pages::projects.timeline')
+            ->set('showTasks', true)
+            ->assertDontSee('Tarea incumpliendo');
+
+        $this->assertSame([], array_filter(array_column($page->instance()->chart['rows'], 'compliance')));
+    }
+
+    public function test_a_project_the_user_cannot_see_is_ignored(): void
+    {
+        $manager = $this->userWithRole(Role::ProjectManager);
+        $mine = Project::factory()->create(['owner_id' => $manager->id, 'name' => 'Mi proyecto']);
+        $foreign = Project::factory()->create(['name' => 'Proyecto ajeno']);
+
+        $page = Livewire::actingAs($manager)->test('pages::projects.timeline')
+            ->set('project', (string) $foreign->id)
+            ->assertDontSee('Proyecto ajeno')
+            ->assertSee('Mi proyecto');
+
+        // Falls back to the normal portfolio view.
+        $this->assertSame(['Mi proyecto'], array_column($page->instance()->chart['rows'], 'label'));
+        $this->assertNotNull($mine);
     }
 
     public function test_the_person_picker_also_lists_people_with_no_project_of_their_own(): void
