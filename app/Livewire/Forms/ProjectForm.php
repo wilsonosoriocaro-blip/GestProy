@@ -41,7 +41,8 @@ class ProjectForm extends Form
 
     public string $progress_mode = 'tasks';
 
-    public int $progress = 0;
+    // Nullable: a cleared number input arrives as null and must fail validation, not the type.
+    public ?int $progress = 0;
 
     public string $budget = '';
 

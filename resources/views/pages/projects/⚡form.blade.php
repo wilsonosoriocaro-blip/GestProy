@@ -179,7 +179,7 @@ new class extends Component {
             <flux:input type="date" wire:model="form.due_date" label="Finalización estimada" />
 
             @if ($this->isCompleted)
-                <flux:input type="date" wire:model="form.completed_at" label="Finalización real" description="Vacío para usar la fecha de hoy" />
+                <flux:input type="date" wire:model="form.completed_at" wire:key="project-completed-at" label="Finalización real" description="Vacío para usar la fecha de hoy" />
             @endif
         </fieldset>
 
@@ -194,10 +194,10 @@ new class extends Component {
             </div>
 
             @if ($this->isManualProgress)
-                <flux:input type="number" wire:model="form.progress" label="Avance (%)" min="0" max="100" step="1" />
+                <flux:input type="number" wire:model="form.progress" wire:key="project-progress" label="Avance (%)" min="0" max="100" step="1" />
             @endif
 
-            <flux:input type="number" wire:model="form.budget" label="Presupuesto en COP (opcional)" min="0" step="0.01" />
+            <flux:input type="number" wire:model="form.budget" wire:key="project-budget" label="Presupuesto en COP (opcional)" min="0" step="0.01" />
         </fieldset>
 
         <flux:textarea wire:model="form.notes" label="Observaciones" rows="3" />

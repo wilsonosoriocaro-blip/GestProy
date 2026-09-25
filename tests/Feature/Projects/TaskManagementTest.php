@@ -101,6 +101,35 @@ class TaskManagementTest extends TestCase
         $this->assertTrue($this->project->activityLogs()->where('event', ProjectActivityEvent::TaskCompleted)->exists());
     }
 
+    public function test_completing_a_task_with_a_real_finish_date(): void
+    {
+        $task = ProjectTask::factory()->for($this->project)->create(['progress' => 40, 'status_id' => $this->statusId('en-ejecucion')]);
+
+        $this->form($this->owner)
+            ->call('open', $task->id)
+            ->set('form.status_id', $this->statusId('finalizada'))
+            ->assertSeeHtml('wire:key="task-completed-at"')
+            ->set('form.completed_at', '2026-09-22')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $task->refresh();
+        $this->assertSame(100, $task->progress);
+        $this->assertSame('2026-09-22', $task->completed_at?->toDateString());
+    }
+
+    public function test_a_cleared_number_field_is_a_validation_error_not_a_crash(): void
+    {
+        $task = ProjectTask::factory()->for($this->project)->create(['status_id' => $this->statusId('en-ejecucion')]);
+
+        $this->form($this->owner)
+            ->call('open', $task->id)
+            ->set('form.progress', '')
+            ->set('form.weight', '')
+            ->call('save')
+            ->assertHasErrors(['form.progress', 'form.weight']);
+    }
+
     public function test_changing_the_assignee_is_logged(): void
     {
         $task = ProjectTask::factory()->for($this->project)->create(['assignee_id' => $this->owner->id]);
