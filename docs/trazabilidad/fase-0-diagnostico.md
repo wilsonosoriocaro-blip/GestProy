@@ -2,6 +2,12 @@
 
 Fecha: 2026-10-19. Rama: `claude/trusting-goldberg-pfofev`.
 
+## Decisiones tomadas (2026-10-19)
+
+- **DP-00:** el sistema de estibas será una **aplicación aparte, en un repositorio nuevo**, con el mismo stack. Este documento queda aquí como antecedente y se copiará al repositorio nuevo.
+- **DP-10:** **PHP 8.3**. GestProy fija `config.platform.php = 8.3.0` y el lock quedó con Symfony 7.4 LTS.
+- **H-01 y H-02 corregidos** en esta rama: se quitó el submódulo `GestProy` sin `.gitmodules` y se regeneró el lock cambiando solo los paquetes de Symfony (8.1 → 7.4) más `symfony/polyfill-php83`.
+
 Este documento es el entregable de la Fase 0. No hay código nuevo del sistema de estibas todavía. Todo lo que se dice sobre el repositorio está verificado leyendo archivos o ejecutando comandos; lo que no se pudo verificar se marca como tal.
 
 ## 1. Qué hay en el repositorio
