@@ -28,3 +28,4 @@ composer test    # Pint + PHPStan (nivel 7) + PHPUnit contra PostgreSQL (base ge
 
 - [Módulo de proyectos](docs/modulo-proyectos.md): arquitectura, reglas de negocio y decisiones de cada fase.
 - [Despliegue en producción](docs/despliegue.md): Nginx, PHP-FPM, PostgreSQL, colas, cron, respaldos y actualizaciones.
+- [Trazabilidad de estibas · Fase 0](docs/trazabilidad/fase-0-diagnostico.md): diagnóstico, arquitectura propuesta, matriz de requisitos y decisiones pendientes.
