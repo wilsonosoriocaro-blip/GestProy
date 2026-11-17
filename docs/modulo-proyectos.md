@@ -178,6 +178,19 @@ Los contadores salen de una sola consulta agregada con `COUNT(*) FILTER (...)`.
 - El resultado se guarda en caché 60 segundos por usuario y filtro. El botón con la hora de generación fuerza el recálculo.
 - `BusinessCalendar::countBetween` pasó de recorrer día por día a aritmética de semanas más festivos. Un test lo compara contra el conteo día por día en 300 rangos aleatorios.
 
+### Tablero: estado del portafolio e indicadores de gestión
+
+La parte superior del tablero se reemplazó por dos bloques:
+
+- **Estado del portafolio:** una tarjeta por tipo de estado (total, en ejecución, planeados, en pausa, en riesgo, finalizados y cancelados) con su conteo y su porcentaje. Las seis tarjetas de estado suman el total, y una barra debajo muestra la composición con los mismos colores. Cada tarjeta abre la lista de proyectos filtrada (`/projects?kind=active`, etc.), conservando la categoría y el responsable elegidos en el tablero. La lista muestra el filtro como etiqueta y se puede quitar.
+- **Indicadores de gestión** con semáforo (`KpiLevel`: en meta, en alerta, crítico), siempre con icono, texto y la meta escrita:
+  - Cumplimiento del cronograma: avance real entre avance esperado de los proyectos en ejecución (índice tipo SPI). Meta ≥ 95 %, alerta 85 a 94 %.
+  - Proyectos dentro del plazo: en ejecución o en riesgo sin vencer ni avance bajo. Meta ≥ 80 %, alerta 60 a 79 %.
+  - Entregas a tiempo: finalizados en la fecha estimada. Meta ≥ 90 %, alerta 75 a 89 %.
+  - Tareas al día: tareas abiertas sin vencer. Meta ≥ 90 %, alerta 75 a 89 %.
+
+Las metas están en `KpiLevel::THRESHOLDS`. La sección "Requiere atención" y lo de más abajo no cambiaron. La caché del tablero usa la clave `projects:dashboard:v2:` para no mezclar datos de la versión anterior al desplegar.
+
 ## Fase 5: cronograma (Gantt)
 
 **Por qué sin librería.** Evalué librerías de Gantt:

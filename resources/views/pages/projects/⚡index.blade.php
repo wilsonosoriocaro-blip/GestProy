@@ -51,6 +51,10 @@ new #[Title('Proyectos')] class extends Component {
     #[Url(except: false)]
     public bool $archived = false;
 
+    /** ProjectStatusKind value; set by the dashboard's status cards. */
+    #[Url(except: '')]
+    public string $kind = '';
+
     #[Url(except: '')]
     public string $sort = '';
 
@@ -79,7 +83,7 @@ new #[Title('Proyectos')] class extends Component {
 
     public function clearFilters(): void
     {
-        $this->reset(['search', 'status', 'owner', 'priority', 'category', 'progress', 'dueFrom', 'dueTo', 'overdue', 'atRisk', 'archived']);
+        $this->reset(['search', 'status', 'owner', 'priority', 'category', 'progress', 'dueFrom', 'dueTo', 'overdue', 'atRisk', 'archived', 'kind']);
         $this->resetPage();
     }
 
@@ -88,7 +92,7 @@ new #[Title('Proyectos')] class extends Component {
     {
         return $this->search !== '' || $this->status !== '' || $this->owner !== '' || $this->priority !== ''
             || $this->category !== '' || $this->progress !== '' || $this->dueFrom !== '' || $this->dueTo !== ''
-            || $this->overdue || $this->atRisk || $this->archived;
+            || $this->overdue || $this->atRisk || $this->archived || $this->kind !== '';
     }
 
     /**
@@ -109,6 +113,7 @@ new #[Title('Proyectos')] class extends Component {
                 'due_to' => $this->dueTo,
                 'overdue' => $this->overdue,
                 'at_risk' => $this->atRisk,
+                'kind' => $this->kind,
                 'archived' => $this->archived,
                 'sort' => $this->sort,
                 'direction' => $this->direction,
@@ -232,14 +237,21 @@ new #[Title('Proyectos')] class extends Component {
             <flux:checkbox wire:model.live="atRisk" label="En riesgo o atrasados" />
             <flux:checkbox wire:model.live="archived" label="Ver archivados" />
 
+            @if ($kindLabel = App\Enums\ProjectStatusKind::tryFrom($kind)?->label())
+                <flux:badge size="sm" color="zinc">
+                    Estado: {{ $kindLabel }}
+                    <flux:badge.close wire:click="$set('kind', '')" aria-label="Quitar filtro de estado" />
+                </flux:badge>
+            @endif
+
             @if ($this->hasFilters)
                 <flux:button size="sm" variant="ghost" icon="x-mark" wire:click="clearFilters">Limpiar filtros</flux:button>
             @endif
 
-            <flux:text class="ms-auto text-sm" wire:loading.remove wire:target="search, status, owner, priority, category, progress, dueFrom, dueTo, overdue, atRisk, archived, sortBy, gotoPage, nextPage, previousPage">
+            <flux:text class="ms-auto text-sm" wire:loading.remove wire:target="search, status, owner, priority, category, progress, dueFrom, dueTo, overdue, atRisk, archived, kind, sortBy, gotoPage, nextPage, previousPage">
                 {{ $this->projects->total() }} {{ $this->projects->total() === 1 ? 'proyecto' : 'proyectos' }}
             </flux:text>
-            <flux:text class="ms-auto text-sm" wire:loading wire:target="search, status, owner, priority, category, progress, dueFrom, dueTo, overdue, atRisk, archived, sortBy, gotoPage, nextPage, previousPage">
+            <flux:text class="ms-auto text-sm" wire:loading wire:target="search, status, owner, priority, category, progress, dueFrom, dueTo, overdue, atRisk, archived, kind, sortBy, gotoPage, nextPage, previousPage">
                 Actualizando…
             </flux:text>
         </div>
@@ -255,7 +267,7 @@ new #[Title('Proyectos')] class extends Component {
             @endif
         </div>
     @else
-        <div wire:loading.class="opacity-60" wire:target="search, status, owner, priority, category, progress, dueFrom, dueTo, overdue, atRisk, archived, sortBy, gotoPage, nextPage, previousPage" class="transition-opacity">
+        <div wire:loading.class="opacity-60" wire:target="search, status, owner, priority, category, progress, dueFrom, dueTo, overdue, atRisk, archived, kind, sortBy, gotoPage, nextPage, previousPage" class="transition-opacity">
             {{-- Small screens: cards with the essentials. --}}
             <ul class="flex flex-col gap-3 md:hidden">
                 @foreach ($this->projects as $project)

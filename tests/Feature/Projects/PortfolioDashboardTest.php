@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Projects;
 
+use App\Enums\KpiLevel;
 use App\Enums\Role;
 use App\Models\Project;
 use App\Models\ProjectCategory;
@@ -217,7 +218,75 @@ class PortfolioDashboardTest extends TestCase
     {
         Livewire::actingAs($this->leader)->test('pages::projects.dashboard')
             ->assertOk()
-            ->assertSee('No hay proyectos activos con fechas para comparar.')
+            ->assertSee('No hay proyectos en ejecución con fechas para medir.')
+            ->assertSee('Sin datos')
             ->assertSee('Todo en orden');
+    }
+
+    public function test_status_cards_add_up_to_the_total_and_link_to_the_filtered_list(): void
+    {
+        $this->project('en-ejecucion', '2026-09-01', '2026-10-30', 30);
+        $this->project('en-ejecucion', '2026-09-01', '2026-10-30', 30);
+        $this->project('planeado', '2026-10-01', '2026-11-30', 0);
+        $this->project('finalizado', '2026-08-01', '2026-09-10', 100, ['completed_at' => '2026-09-08']);
+
+        $page = Livewire::actingAs($this->leader)->test('pages::projects.dashboard');
+        $data = $page->instance()->data;
+
+        $this->assertSame(2, $data['by_kind']['active']);
+        $this->assertSame(1, $data['by_kind']['planned']);
+        $this->assertSame(1, $data['by_kind']['completed']);
+        $this->assertSame($data['projects']['total'], array_sum($data['by_kind']));
+
+        $page->assertSee('Estado del portafolio')
+            ->assertSee(route('projects.index', ['kind' => 'active']), false)
+            ->assertSee(route('projects.index', ['kind' => 'cancelled']), false);
+    }
+
+    public function test_management_indicators(): void
+    {
+        // On track (expected ~50%, real 60%) and behind (expected ~50%, real 10%).
+        $this->project('en-ejecucion', '2026-09-01', '2026-10-15', 60);
+        $late = $this->project('en-ejecucion', '2026-09-01', '2026-10-15', 10);
+        // One delivered on time, one late.
+        $this->project('finalizado', '2026-08-01', '2026-09-10', 100, ['completed_at' => '2026-09-08']);
+        $this->project('finalizado', '2026-08-01', '2026-09-10', 100, ['completed_at' => '2026-09-18']);
+        // Tasks: one open on time, one open overdue, one done.
+        $this->task($late, 'en-ejecucion', '2026-10-01');
+        $this->task($late, 'en-ejecucion', '2026-09-15');
+        $this->task($late, 'finalizada', '2026-09-15', ['progress' => 100]);
+
+        $ind = Livewire::actingAs($this->leader)->test('pages::projects.dashboard')
+            ->assertSee('Indicadores de gestión')
+            ->instance()->data['indicators'];
+
+        $this->assertSame(1, $ind['on_time']['ok']);
+        $this->assertSame(2, $ind['on_time']['total']);
+        $this->assertSame(50, $ind['on_time']['value']);
+        $this->assertSame(['value' => 50, 'ok' => 1, 'total' => 2], $ind['delivered']);
+        $this->assertSame(['value' => 50, 'ok' => 1, 'total' => 2], $ind['tasks']);
+        $this->assertSame(35, $ind['schedule']['real']);
+        $this->assertSame((int) round(35 * 100 / $ind['schedule']['expected']), $ind['schedule']['value']);
+    }
+
+    public function test_kpi_levels_follow_the_thresholds(): void
+    {
+        $this->assertSame(KpiLevel::Good, KpiLevel::for('schedule', 95));
+        $this->assertSame(KpiLevel::Warning, KpiLevel::for('schedule', 85));
+        $this->assertSame(KpiLevel::Critical, KpiLevel::for('schedule', 84));
+        $this->assertSame(KpiLevel::NoData, KpiLevel::for('tasks', null));
+    }
+
+    public function test_the_project_list_filters_by_status_kind(): void
+    {
+        $this->project('en-ejecucion', '2026-09-01', '2026-10-30', 30, ['name' => 'Proyecto en curso']);
+        $this->project('planeado', '2026-10-01', '2026-11-30', 0, ['name' => 'Proyecto futuro']);
+
+        Livewire::actingAs($this->leader)->withQueryParams(['kind' => 'planned'])->test('pages::projects.index')
+            ->assertSee('Proyecto futuro')
+            ->assertDontSee('Proyecto en curso')
+            ->assertSee('Estado: Planeado')
+            ->call('clearFilters')
+            ->assertSee('Proyecto en curso');
     }
 }
