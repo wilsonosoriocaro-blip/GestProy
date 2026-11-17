@@ -45,6 +45,7 @@ class ProjectIndexQuery
      *     progress?: string|null,
      *     overdue?: bool,
      *     at_risk?: bool,
+     *     kind?: string,
      *     archived?: bool,
      *     sort?: string|null,
      *     direction?: string|null,
@@ -87,6 +88,11 @@ class ProjectIndexQuery
 
         if (isset(self::PROGRESS_BANDS[$filters['progress'] ?? ''])) {
             $query->whereBetween('projects.progress', self::PROGRESS_BANDS[$filters['progress']]);
+        }
+
+        // Status kind (e.g. every "en ejecución" status), used by the dashboard cards.
+        if (($kind = ProjectStatusKind::tryFrom((string) ($filters['kind'] ?? ''))) !== null) {
+            $query->whereHas('status', fn (Builder $query) => $query->where('kind', $kind->value));
         }
 
         if (! empty($filters['overdue'])) {

@@ -56,7 +56,7 @@ class PortfolioDashboardQuery
      */
     public function cacheKey(User $user, array $filters, CarbonImmutable $today): string
     {
-        return 'projects:dashboard:'.$user->id.':'.$today->toDateString().':'.md5((string) json_encode([
+        return 'projects:dashboard:v2:'.$user->id.':'.$today->toDateString().':'.md5((string) json_encode([
             'category' => (string) ($filters['category'] ?? ''),
             'owner' => (string) ($filters['owner'] ?? ''),
         ]));
@@ -90,6 +90,7 @@ class PortfolioDashboardQuery
 
         // Portfolio progress: open projects that already started and have a plan to compare against.
         $measured = $projects->filter(fn (Project $p) => $isOpen($p) && $schedules[$p->id]->expectedProgress !== null);
+        $taskSummary = $signals->summarize(DB::table('project_tasks')->whereIn('project_tasks.project_id', $projectIds));
 
         return [
             'generated_at' => now()->toIso8601String(),
@@ -111,9 +112,15 @@ class PortfolioDashboardQuery
                 'real' => $measured->isEmpty() ? null : (int) round($measured->avg('progress')),
                 'expected' => $measured->isEmpty() ? null : (int) round($measured->avg(fn (Project $p): float => (float) $schedules[$p->id]->expectedProgress)),
             ],
+            // One count per status kind: the cards add up to the total.
+            'by_kind' => array_combine(
+                array_map(fn (ProjectStatusKind $k) => $k->value, ProjectStatusKind::cases()),
+                array_map(fn (ProjectStatusKind $k) => $projects->filter(fn (Project $p) => $kind($p) === $k)->count(), ProjectStatusKind::cases()),
+            ),
+            'indicators' => $this->indicators($projects, $schedules, $measured, $taskSummary),
             'by_status' => $this->byStatus($projects),
             'by_priority' => $this->byPriority($projects),
-            'tasks' => $signals->summarize(DB::table('project_tasks')->whereIn('project_tasks.project_id', $projectIds)),
+            'tasks' => $taskSummary,
             'task_statuses' => $this->taskStatuses($projectIds),
             'workload' => $this->workload($projectIds, $today),
             'progress_gap' => $measured
@@ -129,6 +136,51 @@ class PortfolioDashboardQuery
                 'overdue_tasks' => $this->tasksWithSignal($projectIds, $signals, TaskSignals::OVERDUE),
                 'due_soon_tasks' => $this->tasksWithSignal($projectIds, $signals, TaskSignals::DUE_SOON),
             ],
+        ];
+    }
+
+    /**
+     * Management indicators, each a percentage plus what it was computed from.
+     * A null value means there is nothing to measure yet.
+     *
+     * @param  Collection<int, Project>  $projects
+     * @param  array<int, ScheduleSnapshot>  $schedules
+     * @param  Collection<int, Project>  $measured  Open projects with an expected progress to compare against.
+     * @param  array<string, mixed>  $tasks  TaskSignals::summarize() result.
+     * @return array<string, array{value: int|null, ok: int, total: int, real?: int|null, expected?: int|null}>
+     */
+    private function indicators(Collection $projects, array $schedules, Collection $measured, array $tasks): array
+    {
+        $percent = fn (int|float $part, int|float $whole): ?int => $whole > 0 ? (int) round($part * 100 / $whole) : null;
+        $health = fn (Project $p): ScheduleHealth => $schedules[$p->id]->health;
+
+        // Schedule performance (SPI-like): average real progress over average expected progress.
+        $real = $measured->isEmpty() ? null : (float) $measured->avg('progress');
+        $expected = $measured->isEmpty() ? null : (float) $measured->avg(fn (Project $p): float => (float) $schedules[$p->id]->expectedProgress);
+
+        // Projects in execution that keep their dates.
+        $running = $projects->filter(fn (Project $p) => $p->status->kind->lifecycle() === Lifecycle::Open && $health($p) !== ScheduleHealth::NoDates);
+        $runningOk = $running->filter(fn (Project $p) => ! in_array($health($p), [ScheduleHealth::Overdue, ScheduleHealth::BehindSchedule], true));
+
+        // Finished projects delivered by their due date.
+        $delivered = $projects->filter(fn (Project $p) => in_array($health($p), [ScheduleHealth::Completed, ScheduleHealth::CompletedLate], true));
+        $deliveredOk = $delivered->filter(fn (Project $p) => $health($p) === ScheduleHealth::Completed);
+
+        // Open tasks that are not past their due date.
+        $openTasks = array_sum(array_map(fn ($k) => (int) ($tasks['by_kind'][$k->value] ?? 0), TaskSignals::OPEN_KINDS));
+        $overdueTasks = (int) ($tasks['signals'][TaskSignals::OVERDUE] ?? 0);
+
+        return [
+            'schedule' => [
+                'value' => $real === null || ! $expected ? null : (int) round($real * 100 / $expected),
+                'ok' => $measured->count(),
+                'total' => $measured->count(),
+                'real' => $real === null ? null : (int) round($real),
+                'expected' => $expected === null ? null : (int) round($expected),
+            ],
+            'on_time' => ['value' => $percent($runningOk->count(), $running->count()), 'ok' => $runningOk->count(), 'total' => $running->count()],
+            'delivered' => ['value' => $percent($deliveredOk->count(), $delivered->count()), 'ok' => $deliveredOk->count(), 'total' => $delivered->count()],
+            'tasks' => ['value' => $percent($openTasks - $overdueTasks, $openTasks), 'ok' => $openTasks - $overdueTasks, 'total' => $openTasks],
         ];
     }
 

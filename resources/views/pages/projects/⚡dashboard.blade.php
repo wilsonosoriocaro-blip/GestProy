@@ -116,55 +116,155 @@ new #[Title('Tablero ejecutivo')] class extends Component {
     </div>
 
     <div wire:loading.class="opacity-60" wire:target="refresh, category, owner" class="flex flex-col gap-6 transition-opacity">
-        {{-- Headline: portfolio progress + project KPIs --}}
-        <div class="grid gap-4 lg:grid-cols-[minmax(0,22rem)_1fr]">
-            <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
-                <div class="text-sm text-zinc-500 dark:text-zinc-400">Avance general del portafolio</div>
-                @if ($data['progress']['real'] === null)
-                    <div class="mt-2 text-5xl font-semibold text-zinc-900 dark:text-white">—</div>
-                    <flux:text class="mt-2 text-sm">No hay proyectos activos con fechas para comparar.</flux:text>
-                @else
-                    <div class="mt-1 flex items-baseline gap-3">
-                        <span class="text-5xl font-semibold tabular-nums text-zinc-900 dark:text-white">{{ $data['progress']['real'] }}%</span>
-                        @php $gap = $data['progress']['real'] - $data['progress']['expected']; @endphp
-                        <span @class([
-                            'inline-flex items-center gap-1 text-sm font-medium',
-                            'text-red-700 dark:text-red-400' => $gap < -config('business_calendar.behind_schedule_tolerance'),
-                            'text-zinc-600 dark:text-zinc-300' => $gap >= -config('business_calendar.behind_schedule_tolerance'),
-                        ])>
-                            <flux:icon :name="$gap < 0 ? 'arrow-trending-down' : 'arrow-trending-up'" variant="micro" />
-                            {{ $gap > 0 ? '+' : '' }}{{ $gap }} pts vs. esperado
-                        </span>
-                    </div>
-                    <x-projects.progress-bar class="mt-4" :value="$data['progress']['real']" :expected="$data['progress']['expected']" label="Avance general" />
-                    <flux:text class="mt-2 text-xs">Promedio de {{ $data['progress']['measured'] }} {{ $plural($data['progress']['measured'], 'proyecto activo', 'proyectos activos') }} con fechas. La marca muestra el avance esperado a hoy según los días hábiles transcurridos.</flux:text>
-                @endif
+        {{-- Portfolio status: one card per status kind; together they add up to the total. --}}
+        @php
+            $kinds = $data['by_kind'];
+            $total = max($p['total'], 1);
+            $statusCards = [
+                ['total', 'Total', $p['total'], 'briefcase', 'Sin contar archivados', $this->listUrl()],
+                ['active', 'En ejecución', $kinds['active'], 'play-circle', 'Avanzando según su plan', $this->listUrl(['kind' => 'active'])],
+                ['planned', 'Planeados', $kinds['planned'], 'calendar', 'Aún no inician', $this->listUrl(['kind' => 'planned'])],
+                ['paused', 'En pausa', $kinds['paused'], 'pause-circle', 'Detenidos temporalmente', $this->listUrl(['kind' => 'paused'])],
+                ['at_risk', 'En riesgo', $kinds['at_risk'], 'shield-exclamation', 'Declarados en riesgo', $this->listUrl(['kind' => 'at_risk'])],
+                ['completed', 'Finalizados', $kinds['completed'], 'check-badge', 'Entregados', $this->listUrl(['kind' => 'completed'])],
+                ['cancelled', 'Cancelados', $kinds['cancelled'], 'x-circle', 'No continuarán', $this->listUrl(['kind' => 'cancelled'])],
+            ];
+            // Literal classes so Tailwind keeps them. Accent = top bar + composition segment; chip = icon background.
+            $accent = [
+                'total' => 'bg-zinc-800 dark:bg-zinc-200',
+                'active' => 'bg-blue-600 dark:bg-blue-500',
+                'planned' => 'bg-violet-600 dark:bg-violet-500',
+                'paused' => 'bg-amber-500 dark:bg-amber-400',
+                'at_risk' => 'bg-red-600 dark:bg-red-500',
+                'completed' => 'bg-green-600 dark:bg-green-500',
+                'cancelled' => 'bg-zinc-400 dark:bg-zinc-500',
+            ];
+            $chip = [
+                'total' => 'bg-zinc-100 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100',
+                'active' => 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+                'planned' => 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
+                'paused' => 'bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+                'at_risk' => 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+                'completed' => 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-300',
+                'cancelled' => 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300',
+            ];
+        @endphp
+
+        <section aria-labelledby="portfolio-status" class="flex flex-col gap-3">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <flux:heading id="portfolio-status" level="2" size="lg">Estado del portafolio</flux:heading>
+                <flux:text class="text-xs">Selecciona una tarjeta para ver esos proyectos</flux:text>
             </div>
 
-            <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
-                @foreach ([
-                    ['Activos', $p['active'], 'play-circle', null, 'En ejecución o en riesgo'],
-                    ['En riesgo', $p['at_risk'], 'shield-exclamation', $this->listUrl(['atRisk' => true]), 'Declarados en riesgo o atrasados'],
-                    ['Atrasados', $p['overdue'], 'exclamation-triangle', $this->listUrl(['overdue' => true]), 'Vencieron sin finalizar'],
-                    ['Próximos a finalizar', $p['due_soon'], 'bell-alert', null, 'Vencen en '.config('business_calendar.due_soon_business_days').' días hábiles'],
-                    ['En pausa', $p['paused'], 'pause-circle', null, null],
-                    ['Planeados', $p['planned'], 'calendar', null, null],
-                    ['Finalizados', $p['completed'], 'check-circle', null, null],
-                    ['Total', $p['total'], 'briefcase', $this->listUrl(), 'Sin contar archivados'],
-                ] as [$label, $value, $icon, $href, $hint])
-                    <a @if ($href) href="{{ $href }}" wire:navigate @endif
-                        @class(['rounded-xl border border-zinc-200 p-4 dark:border-zinc-700', 'transition hover:border-zinc-400 dark:hover:border-zinc-500' => $href])>
-                        <div class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-                            <flux:icon :name="$icon" variant="micro" /> {{ $label }}
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+                @foreach ($statusCards as [$key, $label, $value, $icon, $hint, $href])
+                    <a href="{{ $href }}" wire:navigate wire:key="status-card-{{ $key }}"
+                        aria-label="{{ $label }}: {{ $value }} {{ $plural($value, 'proyecto', 'proyectos') }}. Ver en la lista de proyectos"
+                        class="group relative flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-4 pt-5 transition hover:-translate-y-0.5 hover:border-zinc-400 hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-500">
+                        <span class="absolute inset-x-0 top-0 h-1 {{ $accent[$key] }}" aria-hidden="true"></span>
+                        <div class="flex items-center gap-2">
+                            <span class="flex size-7 shrink-0 items-center justify-center rounded-lg {{ $chip[$key] }}">
+                                <flux:icon :name="$icon" variant="micro" />
+                            </span>
+                            <span class="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{{ $label }}</span>
                         </div>
-                        <div class="mt-1 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{{ $value }}</div>
-                        @if ($hint)
-                            <div class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{{ $hint }}</div>
-                        @endif
+                        <div class="mt-3 text-3xl font-semibold tabular-nums text-zinc-900 dark:text-white">{{ $value }}</div>
+                        <div class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                            @if ($key === 'total')
+                                {{ $hint }}
+                            @else
+                                {{ (int) round($value * 100 / $total) }}% del portafolio · {{ $hint }}
+                            @endif
+                        </div>
+                        <span class="mt-2 inline-flex items-center gap-1 text-xs font-medium text-zinc-500 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-white" aria-hidden="true">
+                            Ver proyectos <flux:icon name="arrow-right" variant="micro" class="size-3 transition group-hover:translate-x-0.5" />
+                        </span>
                     </a>
                 @endforeach
             </div>
-        </div>
+
+            @if ($p['total'] > 0)
+                {{-- Composition: same colors as the cards, which double as its legend. --}}
+                <div class="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full" role="img"
+                    aria-label="Composición del portafolio: {{ collect($statusCards)->skip(1)->map(fn ($c) => $c[1].' '.$c[2])->join(', ') }}">
+                    @foreach (array_slice($statusCards, 1) as [$key, $label, $value])
+                        @if ($value > 0)
+                            <span class="h-full first:rounded-s-full last:rounded-e-full {{ $accent[$key] }}" style="width: {{ $value * 100 / $total }}%" title="{{ $label }}: {{ $value }}"></span>
+                        @endif
+                    @endforeach
+                </div>
+            @endif
+        </section>
+
+        {{-- Management indicators with a traffic light (RAG): icon + label + color, goal shown on each. --}}
+        @php
+            $ind = $data['indicators'];
+            $indicators = [
+                ['schedule', 'Cumplimiento del cronograma', 'chart-bar',
+                    $ind['schedule']['value'] === null ? 'No hay proyectos en ejecución con fechas para medir.' : 'Avance real '.$ind['schedule']['real'].'% frente al '.$ind['schedule']['expected'].'% esperado a hoy · '.$ind['schedule']['total'].' '.$plural($ind['schedule']['total'], 'proyecto', 'proyectos'),
+                    'Avance real dividido por el avance que debería llevar según los días hábiles transcurridos (índice de desempeño del cronograma, SPI).'],
+                ['on_time', 'Proyectos dentro del plazo', 'clock',
+                    $ind['on_time']['total'] === 0 ? 'No hay proyectos en ejecución con fechas.' : $ind['on_time']['ok'].' de '.$ind['on_time']['total'].' en ejecución sin atraso ni avance bajo',
+                    'Proyectos en ejecución o en riesgo que no están vencidos ni por debajo del avance esperado.'],
+                ['delivered', 'Entregas a tiempo', 'check-badge',
+                    $ind['delivered']['total'] === 0 ? 'Aún no hay proyectos finalizados con fecha.' : $ind['delivered']['ok'].' de '.$ind['delivered']['total'].' finalizados en la fecha comprometida',
+                    'Proyectos finalizados cuya fecha real de entrega no superó la fecha estimada.'],
+                ['tasks', 'Tareas al día', 'clipboard-document-check',
+                    $ind['tasks']['total'] === 0 ? 'No hay tareas abiertas.' : $ind['tasks']['ok'].' de '.$ind['tasks']['total'].' tareas abiertas sin vencer',
+                    'Tareas pendientes, en ejecución, bloqueadas o en revisión que no han pasado su fecha de vencimiento.'],
+            ];
+            $kpiFill = ['good' => 'bg-[#0ca30c]', 'warning' => 'bg-[#fab219]', 'critical' => 'bg-[#d03b3b]', 'no_data' => 'bg-zinc-300 dark:bg-zinc-600'];
+            $kpiBadge = [
+                'good' => 'bg-[#e3f6e3] text-[#0a6b0a] dark:bg-[#0ca30c]/20 dark:text-[#7ee07e]',
+                'warning' => 'bg-[#fff4d6] text-[#8a5a00] dark:bg-[#fab219]/20 dark:text-[#fbd27a]',
+                'critical' => 'bg-[#fbe4e4] text-[#a02525] dark:bg-[#d03b3b]/25 dark:text-[#f3a3a3]',
+                'no_data' => 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300',
+            ];
+        @endphp
+
+        <section aria-labelledby="management-kpis" class="flex flex-col gap-3">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <flux:heading id="management-kpis" level="2" size="lg">Indicadores de gestión</flux:heading>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300" aria-label="Convenciones del semáforo">
+                    @foreach ([App\Enums\KpiLevel::Good, App\Enums\KpiLevel::Warning, App\Enums\KpiLevel::Critical] as $level)
+                        <span class="inline-flex items-center gap-1"><span class="size-2.5 rounded-full {{ $kpiFill[$level->value] }}"></span>{{ $level->label() }}</span>
+                    @endforeach
+                </div>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                @foreach ($indicators as [$key, $title, $icon, $detail, $help])
+                    @php
+                        $value = $ind[$key]['value'];
+                        $level = App\Enums\KpiLevel::for($key, $value);
+                        [$goal, $floor] = App\Enums\KpiLevel::THRESHOLDS[$key];
+                    @endphp
+                    <div wire:key="kpi-{{ $key }}" class="flex flex-col rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                                <flux:icon :name="$icon" variant="micro" class="text-zinc-500 dark:text-zinc-400" />{{ $title }}
+                            </div>
+                            <flux:tooltip :content="$help">
+                                <flux:icon name="information-circle" variant="micro" class="text-zinc-400" aria-label="Cómo se calcula" />
+                            </flux:tooltip>
+                        </div>
+                        <div class="mt-2 flex items-center gap-3">
+                            <span class="text-4xl font-semibold tabular-nums text-zinc-900 dark:text-white">{{ $value === null ? '—' : $value.'%' }}</span>
+                            <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold {{ $kpiBadge[$level->value] }}">
+                                <flux:icon :name="$level->icon()" variant="micro" class="size-3.5" />{{ $level->label() }}
+                            </span>
+                        </div>
+                        <div class="relative mt-3 h-2 rounded-full bg-zinc-100 dark:bg-zinc-700" role="img"
+                            aria-label="{{ $title }}: {{ $value === null ? 'sin datos' : $value.'%' }}, meta {{ $goal }}%">
+                            <span class="block h-full rounded-full {{ $kpiFill[$level->value] }}" style="width: {{ min(100, $value ?? 0) }}%"></span>
+                            <span class="absolute -top-1 h-4 w-0.5 rounded bg-zinc-900 dark:bg-white" style="left: {{ $goal }}%" title="Meta {{ $goal }}%"></span>
+                        </div>
+                        <div class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{{ $detail }}</div>
+                        <div class="mt-auto pt-2 text-[11px] text-zinc-500 dark:text-zinc-400">Meta ≥ {{ $goal }}% · Alerta {{ $floor }}–{{ $goal - 1 }}% · Crítico &lt; {{ $floor }}%</div>
+                    </div>
+                @endforeach
+            </div>
+        </section>
 
         {{-- Alerts --}}
         @php
